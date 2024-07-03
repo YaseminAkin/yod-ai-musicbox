@@ -1,0 +1,5 @@
+Flask
+Pillow
+Flask-Cors
+oemer
+music21
