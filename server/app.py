@@ -10,7 +10,16 @@ import music21
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+
 def process_with_oemer(images):
+
+    """
+    Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
+
+    musicxml_path = "361f53e2-c645-4323-9e31-8761986d7a82.musicxml"
+    midi_path = "b119d4f7-2b33-41bd-b97d-8d750c91dc27.midi"
+
+    """
     musicxml_path = f"{uuid.uuid4()}.musicxml"
     midi_path = f"{uuid.uuid4()}.midi"
     mp3_path = f"{uuid.uuid4()}.mp3"
@@ -25,19 +34,14 @@ def process_with_oemer(images):
         subprocess.run(['oemer', img_file, '-o', musicxml_path])
 
     # Convert MusicXML to MIDI using music21
-    """
-    Burdan itibarenki kısım çalışmıyor TODO TODO TODO TODO TODO
-    
+
     score = music21.converter.parse(musicxml_path)
     mf = music21.midi.translate.music21ObjectToMidiFile(score)
     mf.open(midi_path, 'wb')
     mf.write()
     mf.close()
 
-    # Convert MIDI to MP3 using ffmpeg
-    subprocess.run(['ffmpeg', '-i', midi_path, mp3_path])
-    """
-    return musicxml_path, mp3_path
+    return musicxml_path, midi_path
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
@@ -53,12 +57,13 @@ def process_images():
         processed_images.append(img)
 
     # Process the images with the Oemer library
-    musicxml_path, mp3_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path = process_with_oemer(processed_images)
 
     return jsonify({
         'musicxml': musicxml_path,
-        'mp3': mp3_path
+        'midi': midi_path
     })
+
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):

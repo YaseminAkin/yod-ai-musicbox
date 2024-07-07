@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import * as Tone from 'tone';
+import { Midi } from '@tonejs/midi';
+import 'react-piano/dist/styles.css';
+import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
+import MusicNotation from './MusicNotation'; // Import the MusicNotation component
 
 function useWindowSize() {
   const [windowSize, setWindowSize] = useState({
@@ -27,7 +32,10 @@ function CreateNewMusicPage() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [musicXmlUrl, setMusicXmlUrl] = useState(null);
-  const [mp3Url, setMp3Url] = useState(null);
+  const [midiUrl, setMidiUrl] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeNotes, setActiveNotes] = useState([]);
+  const [musicXML, setMusicXML] = useState(null);
   const size = useWindowSize();
 
   const handleImageUpload = (event) => {
@@ -83,7 +91,13 @@ function CreateNewMusicPage() {
 
       const data = await response.json();
       setMusicXmlUrl(`http://localhost:3000/download/${data.musicxml}`);
-      setMp3Url(`http://localhost:3000/download/${data.mp3}`);
+      setMidiUrl(`http://localhost:3000/download/${data.midi}`);
+
+      // Fetch the musicXML content
+      const musicXmlResponse = await fetch(`http://localhost:3000/download/${data.musicxml}`);
+      const musicXmlContent = await musicXmlResponse.text();
+      setMusicXML(musicXmlContent); // Set the musicXML for visualization
+      setImagePreviews([]); // Clear image previews
     } catch (error) {
       console.error('Error:', error);
     }
@@ -100,6 +114,45 @@ function CreateNewMusicPage() {
     return new Blob([ab], { type: mimeString });
   };
 
+  const playMidi = async (url) => {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const midi = new Midi(arrayBuffer);
+    const now = Tone.now();
+
+    midi.tracks.forEach(track => {
+      const synth = new Tone.Synth().toDestination();
+      track.notes.forEach((note, i) => {
+        const startTime = note.time + now + (i * 0.01); // Ensure strictly increasing start times
+        const endTime = startTime + note.duration;
+
+        synth.triggerAttackRelease(note.name, note.duration, startTime, note.velocity);
+
+        setActiveNotes(prevNotes => [...prevNotes, MidiNumbers.fromNote(note.name)]);
+        Tone.Transport.scheduleOnce(() => {
+          setActiveNotes(prevNotes => prevNotes.filter(n => n !== MidiNumbers.fromNote(note.name)));
+        }, endTime);
+      });
+    });
+
+    Tone.Transport.start();
+    setIsPlaying(true);
+  };
+
+  const stopMidi = () => {
+    Tone.Transport.stop();
+    setActiveNotes([]);
+    setIsPlaying(false);
+  };
+
+  const firstNote = MidiNumbers.fromNote('A0');
+  const lastNote = MidiNumbers.fromNote('C8');
+  const keyboardShortcuts = KeyboardShortcuts.create({
+    firstNote: firstNote,
+    lastNote: lastNote,
+    keyboardConfig: KeyboardShortcuts.HOME_ROW,
+  });
+
   return (
     <>
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#502B4E]">
@@ -107,17 +160,21 @@ function CreateNewMusicPage() {
         <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 w-full md:max-w-3xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
           <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create new Musicbox</h2>
           <div className="flex flex-col items-center">
-            {size.width < 1024 && (
-              <button className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4 w-72 md:w-80 lg:w-96">
-                Scan with Camera
-              </button>
+            {imagePreviews.length === 0 && (
+              <>
+                {size.width < 1024 && (
+                  <button className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4 w-72 md:w-80 lg:w-96">
+                    Scan with Camera
+                  </button>
+                )}
+                <button
+                  onClick={handleImportClick}
+                  className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
+                >
+                  Import the files
+                </button>
+              </>
             )}
-            <button
-              onClick={handleImportClick}
-              className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
-            >
-              Import the files
-            </button>
             <input
               type="file"
               id="fileInput"
@@ -128,13 +185,6 @@ function CreateNewMusicPage() {
             />
             {imagePreviews.length > 0 && (
               <div className="relative mt-4 w-full flex flex-col items-center">
-                <div className="w-full max-w-lg h-96 flex items-center justify-center bg-transparent">
-                  <img
-                    src={imagePreviews[currentIndex]}
-                    alt={`Preview ${currentIndex}`}
-                    className="max-h-full max-w-full object-contain rounded-lg"
-                  />
-                </div>
                 <div className="flex overflow-x-scroll w-full max-w-lg mt-4">
                   {imagePreviews.map((preview, index) => (
                     <div key={index} className="relative m-2">
@@ -159,6 +209,11 @@ function CreateNewMusicPage() {
                 >
                   Submit Images
                 </button>
+              </div>
+            )}
+            {musicXML && (
+              <div className="relative mt-4 w-full flex flex-col items-center">
+                <MusicNotation musicXML={musicXML} />
                 {musicXmlUrl && (
                   <div className="mt-4">
                     <a href={musicXmlUrl} download className="text-blue-500 underline">
@@ -166,12 +221,31 @@ function CreateNewMusicPage() {
                     </a>
                   </div>
                 )}
-                {mp3Url && (
-                  <div className="mt-4">
-                    <audio controls>
-                      <source src={mp3Url} type="audio/mpeg" />
-                      Your browser does not support the audio element.
-                    </audio>
+                {midiUrl && (
+                  <div className="mt-4 flex flex-col items-center">
+                    {!isPlaying ? (
+                      <button
+                        onClick={() => playMidi(midiUrl)}
+                        className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                      >
+                        Play MIDI
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopMidi}
+                        className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                      >
+                        Stop MIDI
+                      </button>
+                    )}
+                    <Piano
+                      noteRange={{ first: firstNote, last: lastNote }}
+                      playNote={() => {}} // Empty function as we don't want to play notes directly
+                      stopNote={() => {}} // Empty function as we don't want to stop notes directly
+                      activeNotes={activeNotes}
+                      width={size.width < 1024 ? size.width - 50 : 700}
+                      keyboardShortcuts={keyboardShortcuts}
+                    />
                   </div>
                 )}
               </div>
