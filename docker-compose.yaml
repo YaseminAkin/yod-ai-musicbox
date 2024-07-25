@@ -4,13 +4,28 @@ services:
   server:
     build: ./server
     ports:
-      - "5000:5000"
+      - "3000:3000" # Assuming Flask is running on port 3000
     volumes:
       - ./server:/app
+    restart: always
+    networks:
+      - app
+    container_name: musicbox-server
+    command: ["python3", "app.py", "runserver"] # Make sure this command is correct
 
   front:
     build: ./Front/vite-project
     ports:
-      - "5173:80"
+      - "5173:5173"
     depends_on:
       - server
+    volumes:
+      - ./Front/vite-project:/app
+    restart: always
+    networks:
+      - app
+    container_name: musicbox-front
+
+networks:
+  app:
+    driver: bridge
