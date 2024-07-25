@@ -3,7 +3,6 @@ import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
-import MusicNotation from './MusicNotation'; // Import the MusicNotation component
 
 function useWindowSize() {
   const [windowSize, setWindowSize] = useState({
@@ -31,11 +30,10 @@ function useWindowSize() {
 function CreateNewMusicPage() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [musicXmlUrl, setMusicXmlUrl] = useState(null);
   const [midiUrl, setMidiUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeNotes, setActiveNotes] = useState([]);
-  const [musicXML, setMusicXML] = useState(null);
+  const [noteQueue, setNoteQueue] = useState([]);
   const size = useWindowSize();
 
   const handleImageUpload = (event) => {
@@ -90,13 +88,7 @@ function CreateNewMusicPage() {
       }
 
       const data = await response.json();
-      setMusicXmlUrl(`http://localhost:3000/download/${data.musicxml}`);
       setMidiUrl(`http://localhost:3000/download/${data.midi}`);
-
-      // Fetch the musicXML content
-      const musicXmlResponse = await fetch(`http://localhost:3000/download/${data.musicxml}`);
-      const musicXmlContent = await musicXmlResponse.text();
-      setMusicXML(musicXmlContent); // Set the musicXML for visualization
       setImagePreviews([]); // Clear image previews
     } catch (error) {
       console.error('Error:', error);
@@ -120,19 +112,24 @@ function CreateNewMusicPage() {
     const midi = new Midi(arrayBuffer);
     const now = Tone.now();
 
+    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+    const newNoteQueue = [];
     midi.tracks.forEach(track => {
-      const synth = new Tone.Synth().toDestination();
-      track.notes.forEach((note, i) => {
-        const startTime = note.time + now + (i * 0.01); // Ensure strictly increasing start times
-        const endTime = startTime + note.duration;
-
-        synth.triggerAttackRelease(note.name, note.duration, startTime, note.velocity);
-
-        setActiveNotes(prevNotes => [...prevNotes, MidiNumbers.fromNote(note.name)]);
-        Tone.Transport.scheduleOnce(() => {
-          setActiveNotes(prevNotes => prevNotes.filter(n => n !== MidiNumbers.fromNote(note.name)));
-        }, endTime);
+      track.notes.forEach(note => {
+        newNoteQueue.push({
+          name: note.name,
+          time: note.time + now,
+          duration: note.duration,
+          velocity: note.velocity,
+          synth: synth
+        });
       });
+    });
+
+    setNoteQueue(newNoteQueue);
+
+    newNoteQueue.forEach(note => {
+      note.synth.triggerAttackRelease(note.name, note.duration, note.time, note.velocity);
     });
 
     Tone.Transport.start();
@@ -142,6 +139,7 @@ function CreateNewMusicPage() {
   const stopMidi = () => {
     Tone.Transport.stop();
     setActiveNotes([]);
+    setNoteQueue([]);
     setIsPlaying(false);
   };
 
@@ -152,6 +150,21 @@ function CreateNewMusicPage() {
     lastNote: lastNote,
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
+
+  useEffect(() => {
+    if (isPlaying) {
+      const interval = setInterval(() => {
+        const currentTime = Tone.now();
+        const active = noteQueue.filter(note =>
+          note.time <= currentTime && note.time + note.duration > currentTime
+        ).map(note => MidiNumbers.fromNote(note.name));
+
+        setActiveNotes(active);
+      }, 50);
+
+      return () => clearInterval(interval);
+    }
+  }, [isPlaying, noteQueue]);
 
   return (
     <>
@@ -211,43 +224,55 @@ function CreateNewMusicPage() {
                 </button>
               </div>
             )}
-            {musicXML && (
+            {midiUrl && (
               <div className="relative mt-4 w-full flex flex-col items-center">
-                <MusicNotation musicXML={musicXML} />
-                {musicXmlUrl && (
-                  <div className="mt-4">
-                    <a href={musicXmlUrl} download className="text-blue-500 underline">
-                      Download MusicXML
-                    </a>
-                  </div>
-                )}
-                {midiUrl && (
-                  <div className="mt-4 flex flex-col items-center">
-                    {!isPlaying ? (
+                <div className="mt-4 flex flex-col items-center">
+                  {!isPlaying ? (
                       <button
-                        onClick={() => playMidi(midiUrl)}
-                        className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                          onClick={() => playMidi(midiUrl)}
+                          className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
                       >
                         Play MIDI
                       </button>
-                    ) : (
+                  ) : (
                       <button
-                        onClick={stopMidi}
-                        className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                          onClick={stopMidi}
+                          className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
                       >
                         Stop MIDI
                       </button>
-                    )}
-                    <Piano
-                      noteRange={{ first: firstNote, last: lastNote }}
-                      playNote={() => {}} // Empty function as we don't want to play notes directly
-                      stopNote={() => {}} // Empty function as we don't want to stop notes directly
+                  )}
+                  <Piano
+                      noteRange={{first: firstNote, last: lastNote}}
+                      playNote={() => {
+                      }} // Empty function as we don't want to play notes directly
+                      stopNote={() => {
+                      }} // Empty function as we don't want to stop notes directly
                       activeNotes={activeNotes}
                       width={size.width < 1024 ? size.width - 50 : 700}
                       keyboardShortcuts={keyboardShortcuts}
-                    />
+                      className="piano mt-4"
+                  />
+                  <div className="relative w-full h-64 overflow-hidden bg-black border-2 border-gray-200 rounded-lg ">
+                    {noteQueue.map((note, index) => (
+                        <div
+                            key={index}
+                            className="absolute bg-purple-700 text-white text-center rounded note"
+                            style={{
+                              left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 100}%`,
+                              top: `${(note.time - Tone.now()) * 100}%`,
+                              width: '2%',
+                              height: '1rem',
+                              transition: `top ${note.duration}s linear`,
+                            }}
+                        >
+                          {note.name}
+                        </div>
+                    ))}
                   </div>
-                )}
+
+
+                </div>
               </div>
             )}
           </div>

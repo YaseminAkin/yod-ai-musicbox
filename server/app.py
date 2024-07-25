@@ -13,11 +13,11 @@ CORS(app)  # Enable CORS for all routes
 
 def process_with_oemer(images):
 
-    """
-    Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
+
+    #Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
 
     musicxml_path = "361f53e2-c645-4323-9e31-8761986d7a82.musicxml"
-    midi_path = "b119d4f7-2b33-41bd-b97d-8d750c91dc27.midi"
+    midi_path = "361f53e2-c645-4323-9e31-8761986d7a82.mid"
 
     """
     musicxml_path = f"{uuid.uuid4()}.musicxml"
@@ -40,7 +40,7 @@ def process_with_oemer(images):
     mf.open(midi_path, 'wb')
     mf.write()
     mf.close()
-
+  """
     return musicxml_path, midi_path
 
 @app.route('/process-images', methods=['POST'])
