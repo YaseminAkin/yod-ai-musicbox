@@ -73,6 +73,7 @@ function CreateNewMusicPage() {
     }
   };
 
+  //all functions after pressing the submit button
   const handleSubmit = async () => {
     const formData = new FormData();
     imagePreviews.forEach((image, index) => {
@@ -213,7 +214,8 @@ function CreateNewMusicPage() {
             )}
             {musicXML && (
               <div className="relative mt-4 w-full flex flex-col items-center">
-                <MusicNotation musicXML={musicXML} />
+                <MusicNotation musicXML={musicXML}//Sıkıntıttııı 
+                />
                 {musicXmlUrl && (
                   <div className="mt-4">
                     <a href={musicXmlUrl} download className="text-blue-500 underline">

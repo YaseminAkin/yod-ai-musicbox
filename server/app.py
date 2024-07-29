@@ -15,9 +15,9 @@ def process_with_oemer(images):
 
     """
     Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
-
-    musicxml_path = "361f53e2-c645-4323-9e31-8761986d7a82.musicxml"
-    midi_path = "b119d4f7-2b33-41bd-b97d-8d750c91dc27.midi"
+"""
+    musicxml_path = "eac661af-79c1-4307-9f92-fdd47f543ad2.musicxml"
+    midi_path = "433bfbbd-9173-4078-a223-0c6f0136539d.midi"
 
     """
     musicxml_path = f"{uuid.uuid4()}.musicxml"
@@ -40,6 +40,7 @@ def process_with_oemer(images):
     mf.open(midi_path, 'wb')
     mf.write()
     mf.close()
+    """
 
     return musicxml_path, midi_path
 
