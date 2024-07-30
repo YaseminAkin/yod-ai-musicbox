@@ -107,37 +107,82 @@ function CreateNewMusicPage() {
   };
 
   const playMidi = async (url) => {
+    console.log("Starting MIDI playback");
+
+    await Tone.start();
+    console.log("Tone.js context started");
+
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     const midi = new Midi(arrayBuffer);
-    const now = Tone.now();
+    const now = Tone.now() + 0.5;  // Adding a delay to ensure samples are loaded
 
-    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    const newNoteQueue = [];
-    midi.tracks.forEach(track => {
-      track.notes.forEach(note => {
-        newNoteQueue.push({
-          name: note.name,
-          time: note.time + now,
-          duration: note.duration,
-          velocity: note.velocity,
-          synth: synth
+    const piano = new Tone.Sampler({
+      urls: {
+        A0: "A0.mp3",
+        C1: "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        A1: "A1.mp3",
+        C2: "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        A2: "A2.mp3",
+        C3: "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        A3: "A3.mp3",
+        C4: "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        A4: "A4.mp3",
+        C5: "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        A5: "A5.mp3",
+        C6: "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        A6: "A6.mp3",
+        C7: "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        A7: "A7.mp3",
+        C8: "C8.mp3"
+      },
+      baseUrl: "https://tonejs.github.io/audio/salamander/",
+      onload: async () => {
+        console.log("Piano samples loaded");
+
+        const newNoteQueue = [];
+        midi.tracks.forEach(track => {
+          track.notes.forEach(note => {
+            newNoteQueue.push({
+              name: note.name,
+              time: note.time + now,
+              duration: note.duration,
+              velocity: note.velocity,
+              synth: piano
+            });
+          });
         });
-      });
-    });
 
-    setNoteQueue(newNoteQueue);
+        console.log("Note queue:", newNoteQueue);
+        setNoteQueue(newNoteQueue);
 
-    newNoteQueue.forEach(note => {
-      note.synth.triggerAttackRelease(note.name, note.duration, note.time, note.velocity);
-    });
+        newNoteQueue.forEach(note => {
+          note.synth.triggerAttackRelease(note.name, note.duration, note.time, note.velocity);
+        });
 
-    Tone.Transport.start();
-    setIsPlaying(true);
+        Tone.Transport.start();
+        setIsPlaying(true);
+      }
+    }).toDestination();
   };
 
   const stopMidi = () => {
     Tone.Transport.stop();
+    Tone.Transport.cancel(); // Cancel all scheduled events
     setActiveNotes([]);
     setNoteQueue([]);
     setIsPlaying(false);
@@ -228,50 +273,46 @@ function CreateNewMusicPage() {
               <div className="relative mt-4 w-full flex flex-col items-center">
                 <div className="mt-4 flex flex-col items-center">
                   {!isPlaying ? (
-                      <button
-                          onClick={() => playMidi(midiUrl)}
-                          className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
-                      >
-                        Play MIDI
-                      </button>
+                    <button
+                      onClick={() => playMidi(midiUrl)}
+                      className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                    >
+                      Play MIDI
+                    </button>
                   ) : (
-                      <button
-                          onClick={stopMidi}
-                          className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
-                      >
-                        Stop MIDI
-                      </button>
+                    <button
+                      onClick={stopMidi}
+                      className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
+                    >
+                      Stop MIDI
+                    </button>
                   )}
                   <Piano
-                      noteRange={{first: firstNote, last: lastNote}}
-                      playNote={() => {
-                      }} // Empty function as we don't want to play notes directly
-                      stopNote={() => {
-                      }} // Empty function as we don't want to stop notes directly
-                      activeNotes={activeNotes}
-                      width={size.width < 1024 ? size.width - 50 : 700}
-                      keyboardShortcuts={keyboardShortcuts}
-                      className="piano mt-4"
+                    noteRange={{ first: firstNote, last: lastNote }}
+                    playNote={() => { }} // Empty function as we don't want to play notes directly
+                    stopNote={() => { }} // Empty function as we don't want to stop notes directly
+                    activeNotes={activeNotes}
+                    width={size.width < 1024 ? size.width - 50 : 700}
+                    keyboardShortcuts={keyboardShortcuts}
+                    className="piano mt-4"
                   />
                   <div className="relative w-full h-64 overflow-hidden bg-black border-2 border-gray-200 rounded-lg ">
                     {noteQueue.map((note, index) => (
-                        <div
-                            key={index}
-                            className="absolute bg-purple-700 text-white text-center rounded note"
-                            style={{
-                              left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 100}%`,
-                              top: `${(note.time - Tone.now()) * 100}%`,
-                              width: '2%',
-                              height: '1rem',
-                              transition: `top ${note.duration}s linear`,
-                            }}
-                        >
-                          {note.name}
-                        </div>
+                      <div
+                        key={index}
+                        className="absolute bg-purple-700 text-white text-center rounded note"
+                        style={{
+                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 100}%`,
+                          top: `${(note.time - Tone.now()) * 100}%`,
+                          width: '2%',
+                          height: '1rem',
+                          transition: `top ${note.duration}s linear`,
+                        }}
+                      >
+                        {note.name}
+                      </div>
                     ))}
                   </div>
-
-
                 </div>
               </div>
             )}
