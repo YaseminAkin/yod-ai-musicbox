@@ -100,39 +100,8 @@ const MusicNotation = ({ musicXML }) => {
             const actualDuration = rest ? `${note.duration._text}r` : duration;
             let stemDirection = Vex.Flow.Stem.UP;
             if(pitch){
-              //Find the note line number of the note. Consider the octave too.
-              let noteLine = 0;
-              switch (pitch.step._text) {
-                case 'C':
-                  noteLine = 0;
-                  break;
-                case 'D':
-                  noteLine = 1;
-                  break;
-                case 'E':
-                  noteLine = 2;
-                  break;
-                case 'F':
-                  noteLine = 3;
-                  break;
-                case 'G':
-                  noteLine = 4;
-                  break;
-                case 'A':
-                  noteLine = 5;
-                  break;
-                case 'B':
-                  noteLine = 6;
-                  break;
-              }
-              //Adjust the note line according to the octave
-              noteLine += (parseInt(pitch.octave._text) - 4) * 7;
-              if(noteLine > 6){
-                stemDirection = Vex.Flow.Stem.DOWN;
-              }
-              else{
-                stemDirection = Vex.Flow.Stem.UP;
-              }
+              const stemDir = String(note.stem._text).toUpperCase();
+              stemDirection = Vex.Flow.Stem[stemDir];
             }
             const staveNote = new StaveNote({
               keys: keys,
