@@ -52,7 +52,7 @@ const MusicNotation = ({ musicXML }) => {
       //Draw a line (vertical)
       context.beginPath();
       context.moveTo(x, y);
-      context.lineTo(x, y + height);
+      context.lineTo(x, y + height );
       context.stroke();
 
       // If the stave is full, move to the next row.
@@ -77,11 +77,12 @@ const MusicNotation = ({ musicXML }) => {
 
       const notes = [];
       const beams = [];
+      const notes2 = [];
       const measureNotes = Array.isArray(measure.note) ? measure.note : [measure.note];
 
       measureNotes.forEach(note => {
         const staff = note.staff;
-        if(staff._text == 1){ //EĞER İLK NOTA ÇİZGİSİNDEYSE YAZDIR ŞİMDİ
+        if(staff._text === '1'){
           const pitch = note.pitch;
           const rest = note.rest;
           const chord = note.chord;
@@ -111,8 +112,46 @@ const MusicNotation = ({ musicXML }) => {
             if (chord) {
               staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
             }
-            //Print the note
             notes.push(staveNote);
+            if (duration === '8' || duration === '16' || duration === '32' || duration === '64') {
+              beams.push(staveNote);
+            }
+          }
+        }
+        else if(staff._text == '2'){ //Bass stave
+          const pitch = note.pitch;
+          const rest = note.rest;
+          const chord = note.chord;
+          const keys = [];
+          if (pitch) {
+            const step = pitch.step._text.toLowerCase();
+            const octave = pitch.octave._text;
+            keys.push(`${step}/${octave}`);
+          }
+          if (rest) {
+            keys.push('b/2'); // Standard rest in bass clef, can adjust as needed
+          }
+
+          // Printlenecek data
+          if (keys.length > 0) {
+            const duration = note.type ? durationMapping[note.type._text] : 'q'; // Default to quarter if type is missing
+            const actualDuration = rest ? `${note.duration._text}r` : duration;
+            let stemDirection = Vex.Flow.Stem.UP;
+            
+            if(pitch){
+              const stemDir = String(note.stem._text).toUpperCase();
+              stemDirection = Vex.Flow.Stem[stemDir];
+            }
+            const staveNote = new StaveNote({
+              keys: keys,
+              duration: actualDuration,
+              clef: 'bass', // Specify bass clef
+              stem_direction: stemDirection
+            });
+            if (chord) {
+              staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
+            }
+            notes2.push(staveNote);
             if (duration === '8' || duration === '16' || duration === '32' || duration === '64') {
               beams.push(staveNote);
             }
@@ -120,9 +159,14 @@ const MusicNotation = ({ musicXML }) => {
         }
       });//Notaların basılmasının bitişi
 
+      //Draw stave1
       const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
       new Formatter().joinVoices([voice]).format([voice], measureWidth);
-      voice.draw(context, stave);
+      voice.draw(context, stave); 
+      //Draw stave2
+      const voice2 = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes2);
+      new Formatter().joinVoices([voice2]).format([voice2], measureWidth);
+      voice2.draw(context, stave2);
 
       /*if (beams.length > 1) {
         const beam = new Beam(beams);
