@@ -76,8 +76,13 @@ const MusicNotation = ({ musicXML }) => {
       stave2.setContext(context).draw();
 
       const notes = [];
-      const beams = [];
+      let beams = [];
+      let totalBeams = [];
+      let beam1Count = 0;
       const notes2 = [];
+      let beams2 = [];
+      let totalBeams2 = [];
+      let beam2Count = 0;
       const measureNotes = Array.isArray(measure.note) ? measure.note : [measure.note];
 
       measureNotes.forEach(note => {
@@ -111,6 +116,24 @@ const MusicNotation = ({ musicXML }) => {
             });
             if (chord) {
               staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
+            }
+            const lastNote = notes.length > 0 ? notes[notes.length - 1] : null;
+            //If durations are different
+            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr')){
+              if(beams.length > 1){
+                totalBeams[beam1Count] = [];
+                for(let i = 0; i < beams.length; i++){
+                  totalBeams[beam1Count].push(beams[i]);
+                  notes[notes.length - (1 + i)].duration = 'q'; //DOES NOT WORKSSS!!!!
+                  console.log(`After: notes[${notes[notes.length - (1 + i)].duration}] = `, notes[notes.length - (1 + i)]);
+                }
+                beam1Count++;
+                //Empty beams
+                beams = [];
+              }
+              else{
+                beams = [];
+              }
             }
             notes.push(staveNote);
             if (duration === '8' || duration === '16' || duration === '32' || duration === '64') {
@@ -151,9 +174,26 @@ const MusicNotation = ({ musicXML }) => {
             if (chord) {
               staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
             }
+            const lastNote = notes2.length > 0 ? notes2[notes2.length - 1] : null;
+            //If durations are different
+            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr')){
+              if(beams2.length > 1){
+                totalBeams2[beam2Count] = [];
+                for(let i = 0; i < beams2.length; i++){
+                  totalBeams2[beam2Count].push(beams2[i]);
+                  notes2[notes2.length - (1 + i)].duration = 'q'; //DOES NOT WORKSSS!!!!
+                }
+                beam2Count++;
+                //Empty beams
+                beams2 = [];
+              }
+              else{
+                beams2 = [];
+              }
+            }
             notes2.push(staveNote);
             if (duration === '8' || duration === '16' || duration === '32' || duration === '64') {
-              beams.push(staveNote);
+              beams2.push(staveNote);
             }
           }
         }
@@ -168,10 +208,27 @@ const MusicNotation = ({ musicXML }) => {
       new Formatter().joinVoices([voice2]).format([voice2], measureWidth);
       voice2.draw(context, stave2);
 
-      /*if (beams.length > 1) {
+      if (beams.length > 1) {
         const beam = new Beam(beams);
         beam.setContext(context).draw();
-      }*/
+      }
+
+      if (beams2.length > 1) {
+        const beam = new Beam(beams2);
+        beam.setContext(context).draw();
+      }
+      if(beam1Count > 0){
+        for(let i = 0; i < beam1Count; i++){
+          const beam = new Beam(totalBeams[i]);
+          beam.setContext(context).draw();
+        }
+      }
+      if(beam2Count > 0){
+        for(let i = 0; i < beam2Count; i++){
+          const beam = new Beam(totalBeams2[i]);
+          beam.setContext(context).draw();
+        }
+      }
 
       x += measureWidth + padding; // Move to the next measure position
     });//Bir measure'ın bitişi
