@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
@@ -34,7 +34,49 @@ function CreateNewMusicPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeNotes, setActiveNotes] = useState([]);
   const [noteQueue, setNoteQueue] = useState([]);
+  const [midiDuration, setMidiDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [piano, setPiano] = useState(null);
   const size = useWindowSize();
+
+  useEffect(() => {
+    const sampler = new Tone.Sampler({
+      urls: {
+        A0: "A0.mp3",
+        C1: "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        A1: "A1.mp3",
+        C2: "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        A2: "A2.mp3",
+        C3: "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        A3: "A3.mp3",
+        C4: "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        A4: "A4.mp3",
+        C5: "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        A5: "A5.mp3",
+        C6: "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        A6: "A6.mp3",
+        C7: "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        A7: "A7.mp3",
+        C8: "C8.mp3"
+      },
+      baseUrl: "https://tonejs.github.io/audio/salamander/",
+    }).toDestination();
+    setPiano(sampler);
+  }, []);
 
   const handleImageUpload = (event) => {
     const files = event.target.files;
@@ -106,87 +148,140 @@ function CreateNewMusicPage() {
     return new Blob([ab], { type: mimeString });
   };
 
-  const playMidi = async (url) => {
+  const loadMidi = async (url) => {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const midi = new Midi(arrayBuffer);
+
+    const newNoteQueue = [];
+    midi.tracks.forEach(track => {
+      track.notes.forEach(note => {
+        newNoteQueue.push({
+          name: note.name,
+          time: note.time,
+          duration: note.duration,
+          velocity: note.velocity,
+        });
+      });
+    });
+
+    setNoteQueue(newNoteQueue);
+    setMidiDuration(midi.duration);
+    return newNoteQueue;
+  };
+
+  const playMidi = async (url, startTime = 0) => {
     console.log("Starting MIDI playback");
 
     await Tone.start();
     console.log("Tone.js context started");
 
-    const response = await fetch(url);
-    const arrayBuffer = await response.arrayBuffer();
-    const midi = new Midi(arrayBuffer);
-    const now = Tone.now() + 0.5;  // Adding a delay to ensure samples are loaded
+    const newNoteQueue = await loadMidi(url);
 
-    const piano = new Tone.Sampler({
-      urls: {
-        A0: "A0.mp3",
-        C1: "C1.mp3",
-        "D#1": "Ds1.mp3",
-        "F#1": "Fs1.mp3",
-        A1: "A1.mp3",
-        C2: "C2.mp3",
-        "D#2": "Ds2.mp3",
-        "F#2": "Fs2.mp3",
-        A2: "A2.mp3",
-        C3: "C3.mp3",
-        "D#3": "Ds3.mp3",
-        "F#3": "Fs3.mp3",
-        A3: "A3.mp3",
-        C4: "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        A4: "A4.mp3",
-        C5: "C5.mp3",
-        "D#5": "Ds5.mp3",
-        "F#5": "Fs5.mp3",
-        A5: "A5.mp3",
-        C6: "C6.mp3",
-        "D#6": "Ds6.mp3",
-        "F#6": "Fs6.mp3",
-        A6: "A6.mp3",
-        C7: "C7.mp3",
-        "D#7": "Ds7.mp3",
-        "F#7": "Fs7.mp3",
-        A7: "A7.mp3",
-        C8: "C8.mp3"
-      },
-      baseUrl: "https://tonejs.github.io/audio/salamander/",
-      onload: async () => {
-        console.log("Piano samples loaded");
+    // Clear any existing scheduled events before scheduling new ones
+    Tone.Transport.cancel();
 
-        const newNoteQueue = [];
-        midi.tracks.forEach(track => {
-          track.notes.forEach(note => {
-            newNoteQueue.push({
-              name: note.name,
-              time: note.time + now,
-              duration: note.duration,
-              velocity: note.velocity,
-              synth: piano
-            });
-          });
-        });
-
-        console.log("Note queue:", newNoteQueue);
-        setNoteQueue(newNoteQueue);
-
-        newNoteQueue.forEach(note => {
-          note.synth.triggerAttackRelease(note.name, note.duration, note.time, note.velocity);
-        });
-
-        Tone.Transport.start();
-        setIsPlaying(true);
+    newNoteQueue.forEach(note => {
+      if (note.time >= startTime) {
+        Tone.Transport.schedule(time => {
+          piano.triggerAttackRelease(note.name, note.duration, time, note.velocity);
+        }, note.time - startTime);
       }
-    }).toDestination();
+    });
+
+    // Reset active notes for piano roll animation
+    setActiveNotes([]);
+
+    // Set the transport position and start it
+    Tone.Transport.position = `${startTime}i`;
+    Tone.Transport.start();
+    setIsPlaying(true);
   };
 
   const stopMidi = () => {
-    Tone.Transport.stop();
-    Tone.Transport.cancel(); // Cancel all scheduled events
-    setActiveNotes([]);
-    setNoteQueue([]);
+    Tone.Transport.pause();
+    setCurrentTime(Tone.Transport.seconds);
     setIsPlaying(false);
   };
+
+  const resetMidi = async () => {
+    await stopMidi();
+    Tone.Transport.stop();
+    Tone.Transport.position = 0;
+    setCurrentTime(0);
+    setNoteQueue([]);
+    setActiveNotes([]);
+  };
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      resetMidi(); // Ensure MIDI stops when component unmounts or dependencies change
+    };
+  }, []);
+
+  // Ensure the piano roll is synchronized with the playback
+  useEffect(() => {
+    if (isPlaying) {
+      const interval = setInterval(() => {
+        const currentTime = Tone.Transport.seconds;
+        const active = noteQueue.filter(note =>
+          note.time <= currentTime && note.time + note.duration > currentTime
+        ).map(note => MidiNumbers.fromNote(note.name));
+
+        setActiveNotes(active);
+
+        // If current time exceeds the midi duration, stop the midi
+        if (currentTime >= midiDuration) {
+          resetMidi();
+        }
+      }, 50);
+
+      return () => clearInterval(interval);
+    }
+  }, [isPlaying, noteQueue, midiDuration]);
+
+  const keyMap = {
+    'a': 'C4',
+    'w': 'C#4',
+    's': 'D4',
+    'e': 'D#4',
+    'd': 'E4',
+    'f': 'F4',
+    't': 'F#4',
+    'g': 'G4',
+    'y': 'G#4',
+    'h': 'A4',
+    'u': 'A#4',
+    'j': 'B4',
+    'k': 'C5'
+  };
+
+  const handleKeyDown = (event) => {
+    const note = keyMap[event.key];
+    if (note && piano) {
+      piano.triggerAttack(note);
+      setActiveNotes((prev) => [...prev, MidiNumbers.fromNote(note)]);
+    }
+  };
+
+  const handleKeyUp = (event) => {
+    const note = keyMap[event.key];
+    if (note && piano) {
+      piano.triggerRelease(note);
+      setActiveNotes((prev) => prev.filter((n) => n !== MidiNumbers.fromNote(note)));
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [piano]);
 
   const firstNote = MidiNumbers.fromNote('A0');
   const lastNote = MidiNumbers.fromNote('C8');
@@ -196,26 +291,11 @@ function CreateNewMusicPage() {
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
 
-  useEffect(() => {
-    if (isPlaying) {
-      const interval = setInterval(() => {
-        const currentTime = Tone.now();
-        const active = noteQueue.filter(note =>
-          note.time <= currentTime && note.time + note.duration > currentTime
-        ).map(note => MidiNumbers.fromNote(note.name));
-
-        setActiveNotes(active);
-      }, 50);
-
-      return () => clearInterval(interval);
-    }
-  }, [isPlaying, noteQueue]);
-
   return (
     <>
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#502B4E]">
         <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">MUSICBOX</h1>
-        <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 w-full md:max-w-3xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
+        <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 w-full md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
           <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create new Musicbox</h2>
           <div className="flex flex-col items-center">
             {imagePreviews.length === 0 && (
@@ -274,7 +354,9 @@ function CreateNewMusicPage() {
                 <div className="mt-4 flex flex-col items-center">
                   {!isPlaying ? (
                     <button
-                      onClick={() => playMidi(midiUrl)}
+                      onClick={() => {
+                        playMidi(midiUrl, currentTime); // Start new playback from currentTime
+                      }}
                       className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
                     >
                       Play MIDI
@@ -292,20 +374,30 @@ function CreateNewMusicPage() {
                     playNote={() => { }} // Empty function as we don't want to play notes directly
                     stopNote={() => { }} // Empty function as we don't want to stop notes directly
                     activeNotes={activeNotes}
-                    width={size.width < 1024 ? size.width - 50 : 700}
                     keyboardShortcuts={keyboardShortcuts}
+                    width={1750}
+                    height={155}
                     className="piano mt-4"
                   />
-                  <div className="relative w-full h-64 overflow-hidden bg-black border-2 border-gray-200 rounded-lg ">
+                  <div
+                      className="relative overflow-hidden"
+                      style={{
+                        width: '100%',
+                        height: '700px',
+                        backgroundColor: 'black',
+                        border: '2px solid gray',
+                        borderRadius: '0.5rem',
+                      }}
+                  >
                     {noteQueue.map((note, index) => (
                       <div
                         key={index}
                         className="absolute bg-purple-700 text-white text-center rounded note"
                         style={{
-                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 100}%`,
-                          top: `${(note.time - Tone.now()) * 100}%`,
+                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 98}%`,
+                          top: `${(note.time - Tone.now()) * 98}%`,
                           width: '2%',
-                          height: '1rem',
+                          height: '5rem',
                           transition: `top ${note.duration}s linear`,
                         }}
                       >
@@ -324,3 +416,4 @@ function CreateNewMusicPage() {
 }
 
 export default CreateNewMusicPage;
+
