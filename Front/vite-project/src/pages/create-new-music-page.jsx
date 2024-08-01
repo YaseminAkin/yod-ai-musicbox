@@ -3,6 +3,8 @@ import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
+import { Worker, Viewer } from '@react-pdf-viewer/core';
+import '@react-pdf-viewer/core/lib/styles/index.css';
 
 function useWindowSize() {
   const [windowSize, setWindowSize] = useState({
@@ -31,6 +33,7 @@ function CreateNewMusicPage() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [midiUrl, setMidiUrl] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeNotes, setActiveNotes] = useState([]);
   const [noteQueue, setNoteQueue] = useState([]);
@@ -131,6 +134,7 @@ function CreateNewMusicPage() {
 
       const data = await response.json();
       setMidiUrl(`http://localhost:3000/download/${data.midi}`);
+      setPdfUrl(`http://localhost:3000/download/${data.pdf}`);
       setImagePreviews([]); // Clear image previews
     } catch (error) {
       console.error('Error:', error);
@@ -349,6 +353,16 @@ function CreateNewMusicPage() {
                 </button>
               </div>
             )}
+            {pdfUrl && (
+              <div className="relative mt-4 w-full flex flex-col items-center">
+                <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">PDF Preview</h3>
+                <div className="border border-gray-300 shadow-lg rounded-lg p-4 bg-white w-full max-w-lg" style={{ height: '500px' }}>
+                  <Worker workerUrl={`https://unpkg.com/pdfjs-dist@2.11.338/build/pdf.worker.min.js`}>
+                    <Viewer fileUrl={pdfUrl} />
+                  </Worker>
+                </div>
+              </div>
+            )}
             {midiUrl && (
               <div className="relative mt-4 w-full flex flex-col items-center">
                 <div className="mt-4 flex flex-col items-center">
@@ -380,14 +394,14 @@ function CreateNewMusicPage() {
                     className="piano mt-4"
                   />
                   <div
-                      className="relative overflow-hidden"
-                      style={{
-                        width: '100%',
-                        height: '700px',
-                        backgroundColor: 'black',
-                        border: '2px solid gray',
-                        borderRadius: '0.5rem',
-                      }}
+                    className="relative overflow-hidden"
+                    style={{
+                      width: '100%',
+                      height: '700px',
+                      backgroundColor: 'black',
+                      border: '2px solid gray',
+                      borderRadius: '0.5rem',
+                    }}
                   >
                     {noteQueue.map((note, index) => (
                       <div
@@ -416,4 +430,3 @@ function CreateNewMusicPage() {
 }
 
 export default CreateNewMusicPage;
-

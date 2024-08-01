@@ -72,7 +72,6 @@ def four_point_transform(image, pts):
 
 def transformation(image):
     image = image.copy()
-    height, width, channels = image.shape
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image_size = gray.size
     threshold = blur_and_threshold(gray)
@@ -137,33 +136,41 @@ def process_image(image):
     return final_img
 
 
-def process_with_oemer(images):
-    # Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
 
-    musicxml_path = "0f935640-e638-490a-9e7b-91fdc9ff354e.musicxml"
-    midi_path = "1b1184d1-fb8f-4ce0-a184-30f91e0f65f1.midi"
-    """
+# Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
+"""
+musicxml_path = "0f935640-e638-490a-9e7b-91fdc9ff354e.musicxml"
+midi_path = "output2.midi"
+"""
+
+def process_with_oemer(images):
+    # Generate unique filenames for output files
     musicxml_path = f"{uuid.uuid4()}.musicxml"
     midi_path = f"{uuid.uuid4()}.midi"
+    mp3_path = f"{uuid.uuid4()}.mp3"
+    pdf_path = f"{uuid.uuid4()}.pdf"
     image_files = []
 
+    # Save images to disk with unique filenames
     for img in images:
         img_file = f"{uuid.uuid4()}.png"
         img.save(img_file)
         image_files.append(img_file)
 
+    # Run Oemer on each image file to generate MusicXML
     for img_file in image_files:
         subprocess.run(['oemer', img_file, '-o', musicxml_path])
 
-    # Convert MusicXML to MIDI using music21
-    score = music21.converter.parse(musicxml_path)
-    mf = music21.midi.translate.music21ObjectToMidiFile(score)
-    mf.open(midi_path, 'wb')
-    mf.write()
-    mf.close()
-    """
-    return musicxml_path, midi_path
+    # Convert MusicXML to MIDI using MuseScore
+    subprocess.run(['mscore', musicxml_path, '-o', midi_path, '--force', '-F'])
 
+    # Convert MusicXML to MP3 using MuseScore
+    subprocess.run(['mscore', musicxml_path, '-o', mp3_path, '--force', '-F'])
+
+    # Convert MusicXML to PDF using MuseScore
+    subprocess.run(['mscore', musicxml_path, '-o', pdf_path, '--force', '-F'])
+
+    return musicxml_path, midi_path, mp3_path, pdf_path
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
@@ -180,11 +187,13 @@ def process_images():
         processed_images.append(Image.fromarray(processed_img))
 
     # Process the images with the Oemer library
-    musicxml_path, midi_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
 
     return jsonify({
         'musicxml': musicxml_path,
-        'midi': midi_path
+        'midi': midi_path,
+        'mp3': mp3_path,
+        'pdf': pdf_path
     })
 
 
