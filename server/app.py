@@ -139,16 +139,19 @@ def process_image(image):
 
 # Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
 """
-musicxml_path = "0f935640-e638-490a-9e7b-91fdc9ff354e.musicxml"
-midi_path = "output2.midi"
+    musicxml_path = "cefff497-cedc-44fa-8e3f-2eb6e95884c0.musicxml"
+    midi_path = "9b2ea95f-de3a-4d87-a99a-7f65259b18c8.midi"
 """
 
 def process_with_oemer(images):
-    # Generate unique filenames for output files
-    musicxml_path = f"{uuid.uuid4()}.musicxml"
-    midi_path = f"{uuid.uuid4()}.midi"
+
     mp3_path = f"{uuid.uuid4()}.mp3"
     pdf_path = f"{uuid.uuid4()}.pdf"
+    # Generate unique filenames for output files
+
+    musicxml_path = f"{uuid.uuid4()}.musicxml"
+    midi_path = f"{uuid.uuid4()}.midi"
+    
     image_files = []
 
     # Save images to disk with unique filenames
@@ -171,6 +174,7 @@ def process_with_oemer(images):
     subprocess.run(['mscore', musicxml_path, '-o', pdf_path, '--force', '-F'])
 
     return musicxml_path, midi_path, mp3_path, pdf_path
+
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
