@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect} from 'react';
 import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
@@ -95,9 +95,11 @@ function CreateNewMusicPage() {
     });
 
     Promise.all(imageUrls).then(results => {
-      setImagePreviews(results);
+      setImagePreviews(prevPreviews => [...prevPreviews, ...results]);
       setCurrentIndex(0); // Reset to the first image when new images are uploaded
     });
+    // Reset the input value to allow uploading the same file again
+    event.target.value = null;
   };
 
   const handleImportClick = () => {
@@ -135,7 +137,6 @@ function CreateNewMusicPage() {
       const data = await response.json();
       setMidiUrl(`http://localhost:3000/download/${data.midi}`);
       setPdfUrl(`http://localhost:3000/download/${data.pdf}`);
-      setImagePreviews([]); // Clear image previews
     } catch (error) {
       console.error('Error:', error);
     }
@@ -295,38 +296,34 @@ function CreateNewMusicPage() {
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
 
+  const resetAllStates = () => {
+    setImagePreviews([]);
+    setCurrentIndex(0);
+    setMidiUrl(null);
+    setPdfUrl(null);
+    setIsPlaying(false);
+    setActiveNotes([]);
+    setNoteQueue([]);
+    setMidiDuration(0);
+    setCurrentTime(0);
+    resetMidi();
+  };
+
   return (
     <>
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#502B4E]">
         <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">MUSICBOX</h1>
-        <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 w-full md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
-          <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create new Musicbox</h2>
+        <button
+          onClick={resetAllStates}
+          className="absolute top-4 right-4 bg-white hover:bg-purple-700 text-[#502B4E] font-bold py-2 px-4 rounded-full"
+        >
+          Create New Musicbox
+        </button>
+        <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
           <div className="flex flex-col items-center">
-            {imagePreviews.length === 0 && (
+            {!pdfUrl  && (
               <>
-                {size.width < 1024 && (
-                  <button className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4 w-72 md:w-80 lg:w-96">
-                    Scan with Camera
-                  </button>
-                )}
-                <button
-                  onClick={handleImportClick}
-                  className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
-                >
-                  Import the files
-                </button>
-              </>
-            )}
-            <input
-              type="file"
-              id="fileInput"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-              multiple
-            />
-            {imagePreviews.length > 0 && (
-              <div className="relative mt-4 w-full flex flex-col items-center">
+                <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create Musicbox</h2>
                 <div className="flex overflow-x-scroll w-full max-w-lg mt-4">
                   {imagePreviews.map((preview, index) => (
                     <div key={index} className="relative m-2">
@@ -345,20 +342,41 @@ function CreateNewMusicPage() {
                     </div>
                   ))}
                 </div>
+                {size.width < 1024 && (
+                  <button className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4 w-72 md:w-80 lg:w-96">
+                    Scan with Camera
+                  </button>
+                )}
+                <button
+                  onClick={handleImportClick}
+                  className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
+                >
+                  {imagePreviews.length === 0 ? "Import Files" : "Import More Files"}
+                </button>
+                {imagePreviews.length > 0 && (
                 <button
                   onClick={handleSubmit}
                   className="mt-4 bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full"
                 >
                   Submit Images
                 </button>
-              </div>
+                )}
+              </>
             )}
+            <input
+              type="file"
+              id="fileInput"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+              multiple
+            />
             {pdfUrl && (
-              <div className="relative mt-4 w-full flex flex-col items-center">
-                <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">PDF Preview</h3>
+              <div className="relative w-full flex flex-col items-center">
+                <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">Digital Notation</h3>
                 <div className="border border-gray-300 shadow-lg rounded-lg p-4 bg-white w-full max-w-lg" style={{ height: '500px' }}>
-                  <Worker workerUrl={`https://unpkg.com/pdfjs-dist@2.11.338/build/pdf.worker.min.js`}>
-                    <Viewer fileUrl={pdfUrl} />
+                  <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.5.141/build/pdf.worker.min.js`}>
+                    <Viewer fileUrl={`${pdfUrl}`} />
                   </Worker>
                 </div>
               </div>
@@ -398,7 +416,7 @@ function CreateNewMusicPage() {
                     style={{
                       width: '100%',
                       height: '700px',
-                      backgroundColor: 'black',
+                      backgroundColor: '#502B4E',
                       border: '2px solid gray',
                       borderRadius: '0.5rem',
                     }}

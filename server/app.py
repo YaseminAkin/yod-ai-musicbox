@@ -136,19 +136,20 @@ def process_image(image):
     return final_img
 
 
-
-# Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız musicxml ve midi koyun)
 """
+Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız 
+musicxml ve midi koyun)
+
     musicxml_path = "cefff497-cedc-44fa-8e3f-2eb6e95884c0.musicxml"
     midi_path = "9b2ea95f-de3a-4d87-a99a-7f65259b18c8.midi"
 """
 
+
 def process_with_oemer(images):
 
+    # Generate unique filenames for output files
     mp3_path = f"{uuid.uuid4()}.mp3"
     pdf_path = f"{uuid.uuid4()}.pdf"
-    # Generate unique filenames for output files
-
     musicxml_path = f"{uuid.uuid4()}.musicxml"
     midi_path = f"{uuid.uuid4()}.midi"
     
@@ -178,20 +179,26 @@ def process_with_oemer(images):
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
-    if 'images' not in request.files:
-        return jsonify({'error': 'No images part in the request'}), 400
-
-    images = request.files.getlist('images')
-
-    processed_images = []
-    for image in images:
-        img = Image.open(image)
-        # Process the image using OpenCV functions
-        processed_img = process_image(img)
-        processed_images.append(Image.fromarray(processed_img))
+    # if 'images' not in request.files:
+    #     return jsonify({'error': 'No images part in the request'}), 400
+    #
+    # images = request.files.getlist('images')
+    #
+    # processed_images = []
+    # for image in images:
+    #     img = Image.open(image)
+    #
+    #     # Process the image using OpenCV functions
+    #     processed_img = process_image(img)
+    #     processed_images.append(Image.fromarray(processed_img))
 
     # Process the images with the Oemer library
-    musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
+    # musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
+
+    musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+    mp3_path = "f61a0cd1-b91e-4eb4-ba26-ea5b0aa0d8c2.mp3"
+    pdf_path = "88fab227-c553-4182-8a4c-2f33e6e988ba.pdf"
 
     return jsonify({
         'musicxml': musicxml_path,
