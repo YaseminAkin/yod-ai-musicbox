@@ -191,7 +191,7 @@ def process_images():
     #     # Process the image using OpenCV functions
     #     processed_img = process_image(img)
     #     processed_images.append(Image.fromarray(processed_img))
-
+    #
     # Process the images with the Oemer library
     # musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
 
@@ -210,7 +210,20 @@ def process_images():
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
-    return send_file(filename, as_attachment=True)
+    # Define the directory where your files are stored
+    directory = os.path.join(os.getcwd(), 'path_to_your_files_directory')
+
+    # Create the full file path
+    file_path = os.path.join(directory, filename)
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        app.logger.error(f"File not found: {file_path}")
+        return jsonify({'error': 'File not found'}), 404
+
+    app.logger.info(f"Sending file: {file_path}")
+    return send_file(file_path, as_attachment=True)
+
 
 
 if __name__ == '__main__':

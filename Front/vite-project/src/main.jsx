@@ -1,10 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import './index.css'
-import CreateNewMusicPage from "./pages/create-new-music-page.jsx";
+import App from "./App.jsx";
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <CreateNewMusicPage/>
+    <App/>
   </React.StrictMode>,
 )

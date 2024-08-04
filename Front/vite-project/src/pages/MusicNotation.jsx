@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import Vex, { Stem } from 'vexflow';
 import { xml2json } from 'xml-js';
 

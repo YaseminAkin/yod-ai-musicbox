@@ -4,43 +4,26 @@ import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
+import { useNavigate, useLocation } from 'react-router-dom';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 
-function useWindowSize() {
-  const [windowSize, setWindowSize] = useState({
-    width: undefined,
-    height: undefined,
-  });
+function Musicbox() {
 
-  useEffect(() => {
-    function handleResize() {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    }
+  const location = useLocation();
+  const { data } = location.state || {};
 
-    window.addEventListener('resize', handleResize);
-    handleResize();
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return windowSize;
-}
-
-function CreateNewMusicPage() {
-  const [imagePreviews, setImagePreviews] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [midiUrl, setMidiUrl] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeNotes, setActiveNotes] = useState([]);
   const [noteQueue, setNoteQueue] = useState([]);
   const [midiDuration, setMidiDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [piano, setPiano] = useState(null);
-  const size = useWindowSize();
+  const [midi, setMidi] = useState(null);
+  const [pdf, setPdf] = useState(null);
+  const [mp3, setMp3] = useState(null);
+  const [musicXML, setMusicXML] = useState(null);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const sampler = new Tone.Sampler({
@@ -79,81 +62,12 @@ function CreateNewMusicPage() {
       baseUrl: "https://tonejs.github.io/audio/salamander/",
     }).toDestination();
     setPiano(sampler);
+    setMidi(`http://localhost:3000/download/${data.midi}`);
+    setPdf(`http://localhost:3000/download/${data.pdf}`);
   }, []);
 
-  const handleImageUpload = (event) => {
-    const files = event.target.files;
-    const fileArray = Array.from(files);
-    const imageUrls = fileArray.map(file => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      return new Promise((resolve) => {
-        reader.onloadend = () => {
-          resolve(reader.result);
-        };
-      });
-    });
 
-    Promise.all(imageUrls).then(results => {
-      setImagePreviews(prevPreviews => [...prevPreviews, ...results]);
-      setCurrentIndex(0); // Reset to the first image when new images are uploaded
-    });
-    // Reset the input value to allow uploading the same file again
-    event.target.value = null;
-  };
-
-  const handleImportClick = () => {
-    document.getElementById('fileInput').click();
-  };
-
-  const selectImage = (index) => {
-    setCurrentIndex(index);
-  };
-
-  const deleteImage = (index) => {
-    const newImagePreviews = imagePreviews.filter((_, i) => i !== index);
-    setImagePreviews(newImagePreviews);
-    if (currentIndex >= newImagePreviews.length) {
-      setCurrentIndex(newImagePreviews.length - 1);
-    }
-  };
-
-  const handleSubmit = async () => {
-    const formData = new FormData();
-    imagePreviews.forEach((image, index) => {
-      formData.append('images', dataURItoBlob(image), `image${index}.png`);
-    });
-
-    try {
-      const response = await fetch('http://localhost:3000/process-images', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const data = await response.json();
-      setMidiUrl(`http://localhost:3000/download/${data.midi}`);
-      setPdfUrl(`http://localhost:3000/download/${data.pdf}`);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  const dataURItoBlob = (dataURI) => {
-    const byteString = atob(dataURI.split(',')[1]);
-    const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
-    }
-    return new Blob([ab], { type: mimeString });
-  };
-
-  const loadMidi = async (url) => {
+ const loadMidi = async (url) => {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     const midi = new Midi(arrayBuffer);
@@ -161,11 +75,13 @@ function CreateNewMusicPage() {
     const newNoteQueue = [];
     midi.tracks.forEach(track => {
       track.notes.forEach(note => {
+        const isSharpOrFlat = note.name.includes('#') || note.name.includes('b');
         newNoteQueue.push({
           name: note.name,
           time: note.time,
           duration: note.duration,
           velocity: note.velocity,
+          width: isSharpOrFlat ? 1 : 2, // Set width based on note name
         });
       });
     });
@@ -174,6 +90,7 @@ function CreateNewMusicPage() {
     setMidiDuration(midi.duration);
     return newNoteQueue;
   };
+
 
   const playMidi = async (url, startTime = 0) => {
     console.log("Starting MIDI playback");
@@ -185,13 +102,10 @@ function CreateNewMusicPage() {
 
     // Clear any existing scheduled events before scheduling new ones
     Tone.Transport.cancel();
-
     newNoteQueue.forEach(note => {
-      if (note.time >= startTime) {
-        Tone.Transport.schedule(time => {
-          piano.triggerAttackRelease(note.name, note.duration, time, note.velocity);
-        }, note.time - startTime);
-      }
+      Tone.Transport.schedule(time => {
+        piano.triggerAttackRelease(note.name, note.duration, time, note.velocity);
+      }, note.time);
     });
 
     // Reset active notes for piano roll animation
@@ -200,12 +114,17 @@ function CreateNewMusicPage() {
     // Set the transport position and start it
     Tone.Transport.position = `${startTime}i`;
     Tone.Transport.start();
+
+    // Delay the setIsPlaying(true) call by 0.5 seconds
+    setTimeout(() => {
+
+    }, 1000);
     setIsPlaying(true);
   };
 
   const stopMidi = () => {
     Tone.Transport.pause();
-    setCurrentTime(Tone.Transport.seconds);
+    setCurrentTime(Tone.Transport.seconds); // Save the exact current position
     setIsPlaying(false);
   };
 
@@ -213,13 +132,14 @@ function CreateNewMusicPage() {
     await stopMidi();
     Tone.Transport.stop();
     Tone.Transport.position = 0;
-    setCurrentTime(0);
+    setCurrentTime(0); // Reset the position to the beginning
     setNoteQueue([]);
+    setMidiDuration(0);
     setActiveNotes([]);
   };
 
-  // Add cleanup effect
-  useEffect(() => {
+
+    useEffect(() => {
     return () => {
       resetMidi(); // Ensure MIDI stops when component unmounts or dependencies change
     };
@@ -240,7 +160,7 @@ function CreateNewMusicPage() {
         if (currentTime >= midiDuration) {
           resetMidi();
         }
-      }, 50);
+      }, 110);
 
       return () => clearInterval(interval);
     }
@@ -297,16 +217,20 @@ function CreateNewMusicPage() {
   });
 
   const resetAllStates = () => {
-    setImagePreviews([]);
-    setCurrentIndex(0);
-    setMidiUrl(null);
-    setPdfUrl(null);
+    setMidi(null);
+    setPdf(null);
+    setMp3(null);
+    setMusicXML(null);
     setIsPlaying(false);
     setActiveNotes([]);
     setNoteQueue([]);
     setMidiDuration(0);
-    setCurrentTime(0);
     resetMidi();
+  };
+
+  const resetAllStatesAndNavigate = () => {
+    resetAllStates();
+    navigate('/');
   };
 
   return (
@@ -314,80 +238,30 @@ function CreateNewMusicPage() {
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#502B4E]">
         <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">MUSICBOX</h1>
         <button
-          onClick={resetAllStates}
+          onClick={resetAllStatesAndNavigate}
           className="absolute top-4 right-4 bg-white hover:bg-purple-700 text-[#502B4E] font-bold py-2 px-4 rounded-full"
         >
           Create New Musicbox
         </button>
         <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
           <div className="flex flex-col items-center">
-            {!pdfUrl  && (
-              <>
-                <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create Musicbox</h2>
-                <div className="flex overflow-x-scroll w-full max-w-lg mt-4">
-                  {imagePreviews.map((preview, index) => (
-                    <div key={index} className="relative m-2">
-                      <img
-                        src={preview}
-                        alt={`Thumbnail ${index}`}
-                        className={`w-24 h-24 object-cover cursor-pointer rounded-lg ${currentIndex === index ? 'border-4 border-purple-700' : ''}`}
-                        onClick={() => selectImage(index)}
-                      />
-                      <button
-                        onClick={() => deleteImage(index)}
-                        className="absolute top-0 right-0 bg-gray-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {size.width < 1024 && (
-                  <button className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4 w-72 md:w-80 lg:w-96">
-                    Scan with Camera
-                  </button>
-                )}
-                <button
-                  onClick={handleImportClick}
-                  className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
-                >
-                  {imagePreviews.length === 0 ? "Import Files" : "Import More Files"}
-                </button>
-                {imagePreviews.length > 0 && (
-                <button
-                  onClick={handleSubmit}
-                  className="mt-4 bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full"
-                >
-                  Submit Images
-                </button>
-                )}
-              </>
-            )}
-            <input
-              type="file"
-              id="fileInput"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-              multiple
-            />
-            {pdfUrl && (
+            {pdf && (
               <div className="relative w-full flex flex-col items-center">
                 <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">Digital Notation</h3>
                 <div className="border border-gray-300 shadow-lg rounded-lg p-4 bg-white w-full max-w-lg" style={{ height: '500px' }}>
                   <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.5.141/build/pdf.worker.min.js`}>
-                    <Viewer fileUrl={`${pdfUrl}`} />
+                    <Viewer fileUrl={`${pdf}`} />
                   </Worker>
                 </div>
               </div>
             )}
-            {midiUrl && (
+            {midi && (
               <div className="relative mt-4 w-full flex flex-col items-center">
                 <div className="mt-4 flex flex-col items-center">
                   {!isPlaying ? (
                     <button
                       onClick={() => {
-                        playMidi(midiUrl, currentTime); // Start new playback from currentTime
+                        playMidi(midi, currentTime); // Start new playback from currentTime
                       }}
                       className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full mb-4"
                     >
@@ -401,7 +275,7 @@ function CreateNewMusicPage() {
                       Stop MIDI
                     </button>
                   )}
-                  <Piano
+                <Piano
                     noteRange={{ first: firstNote, last: lastNote }}
                     playNote={() => { }} // Empty function as we don't want to play notes directly
                     stopNote={() => { }} // Empty function as we don't want to stop notes directly
@@ -416,7 +290,7 @@ function CreateNewMusicPage() {
                     style={{
                       width: '100%',
                       height: '700px',
-                      backgroundColor: '#502B4E',
+                      backgroundColor: '#000000',
                       border: '2px solid gray',
                       borderRadius: '0.5rem',
                     }}
@@ -426,11 +300,12 @@ function CreateNewMusicPage() {
                         key={index}
                         className="absolute bg-purple-700 text-white text-center rounded note"
                         style={{
-                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 98}%`,
-                          top: `${(note.time - Tone.now()) * 98}%`,
-                          width: '2%',
-                          height: '5rem',
-                          transition: `top ${note.duration}s linear`,
+                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 98.5}%`,
+                          top: `${(note.time - Tone.now()) * 90}%`,
+                          width: `${note.width}%`,
+                          height: `${note.duration * 15}rem`,
+                          transition: `top ${note.velocity / 2}s linear`,
+                          fontSize: `0.8rem`,
                         }}
                       >
                         {note.name}
@@ -447,4 +322,4 @@ function CreateNewMusicPage() {
   );
 }
 
-export default CreateNewMusicPage;
+export default Musicbox;
