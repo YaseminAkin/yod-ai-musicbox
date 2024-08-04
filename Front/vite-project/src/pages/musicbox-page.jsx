@@ -7,6 +7,29 @@ import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 
+function useWindowSize() {
+  const [windowSize, setWindowSize] = useState({
+    width: undefined,
+    height: undefined,
+  });
+
+  useEffect(() => {
+    function handleResize() {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    }
+
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowSize;
+}
+
 function Musicbox() {
 
   const location = useLocation();
@@ -22,6 +45,7 @@ function Musicbox() {
   const [pdf, setPdf] = useState(null);
   const [mp3, setMp3] = useState(null);
   const [musicXML, setMusicXML] = useState(null);
+  const size = useWindowSize(); // Added size hook
 
   const navigate = useNavigate();
 
@@ -275,21 +299,21 @@ function Musicbox() {
                       Stop MIDI
                     </button>
                   )}
-                <Piano
+                  <Piano
                     noteRange={{ first: firstNote, last: lastNote }}
                     playNote={() => { }} // Empty function as we don't want to play notes directly
                     stopNote={() => { }} // Empty function as we don't want to stop notes directly
                     activeNotes={activeNotes}
                     keyboardShortcuts={keyboardShortcuts}
-                    width={1750}
-                    height={155}
+                    width={size.width > 768 ? 1750 : size.width * 0.9} // Responsive width
+                    height={size.width > 768 ? 155 : 80} // Responsive height
                     className="piano mt-4"
                   />
                   <div
                     className="relative overflow-hidden"
                     style={{
                       width: '100%',
-                      height: '700px',
+                      height: '600px', // Adjust height for mobile
                       backgroundColor: '#000000',
                       border: '2px solid gray',
                       borderRadius: '0.5rem',
