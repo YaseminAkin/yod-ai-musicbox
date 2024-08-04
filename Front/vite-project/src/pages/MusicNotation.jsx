@@ -75,21 +75,36 @@ const MusicNotation = ({ musicXML }) => {
       stave.setContext(context).draw();
       stave2.setContext(context).draw();
 
+      //Measurenotes of staff 1 and 2
+      const staff1 = [];
+      const staff2 = [];
+      
+
+      //Notes that will be printed
       const notes = [];
-      const chordss = [];
+      const notes2 = [];
+
+      //Beam arrangement for staff1 notes
       let beams = [];
       let totalBeams = [];
       let beam1Count = 0;
-      const notes2 = [];
-      const chordss2 = [];
+      
+      //Beam arrangement for staff2 notes
       let beams2 = [];
       let totalBeams2 = [];
       let beam2Count = 0;
       const measureNotes = Array.isArray(measure.note) ? measure.note : [measure.note];
+
       measureNotes.forEach(note => {
-        const staff = note.staff;
-        if(staff._text === '1'){
-          const pitch = note.pitch;
+        if(note.staff._text == '1'){
+          staff1.push(note);
+        }
+        else if(note.staff._text == '2'){
+          staff2.push(note);
+        }
+      });
+      staff1.forEach((note, indexx) => {
+        const pitch = note.pitch;
           const rest = note.rest;
           const chord = note.chord;
           const keys = [];
@@ -110,16 +125,22 @@ const MusicNotation = ({ musicXML }) => {
               const stemDir = String(note.stem._text).toUpperCase();
               stemDirection = Vex.Flow.Stem[stemDir];
             }
+            if(staff1[indexx+1] && staff1[indexx+1].chord && staff1[indexx+1].staff._text == '1'){ //If the next note is a chord
+              const keyys = [];
+              const pitchh = staff1[indexx+1].pitch;
+              const stepp = pitchh.step._text.toLowerCase();
+              const octavee = pitchh.octave._text;
+              keyys.push(`${stepp}/${octavee}`);
+              keys.push(`${stepp}/${octavee}`);
+            }
             const staveNote = new StaveNote({
               keys: keys,
               duration: actualDuration,
               stem_direction: stemDirection,
             });
             if (chord) {
-              staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
-              staveNote.setNoteDisplaced(false);
-              //notes[notes.length - 1].setXShift(staveNote.getVoiceShiftWidth());
-              chordss.push(staveNote);
+              //Handled one iteration before. Return.
+              return; 
             }
             const lastNote = notes.length > 0 ? notes[notes.length - 1] : null;
             //If durations are different
@@ -144,9 +165,9 @@ const MusicNotation = ({ musicXML }) => {
               beams.push(staveNote);
             }
           }
-        }
-        else if(staff._text == '2'){ //Bass stave
-          const pitch = note.pitch;
+      }); //bunu yapıcam.
+      staff2.forEach((note, indexx) => {
+        const pitch = note.pitch;
           const rest = note.rest;
           const chord = note.chord;
           const keys = [];
@@ -169,6 +190,14 @@ const MusicNotation = ({ musicXML }) => {
               const stemDir = String(note.stem._text).toUpperCase();
               stemDirection = Vex.Flow.Stem[stemDir];
             }
+            if(staff2[indexx+1] && staff2[indexx+1].chord && staff2[indexx+1].staff._text == '2'){ //If the next note is a chord
+              const keyys = [];
+              const pitchh = staff2[indexx+1].pitch;
+              const stepp = pitchh.step._text.toLowerCase();
+              const octavee = pitchh.octave._text;
+              keyys.push(`${stepp}/${octavee}`);
+              keys.push(`${stepp}/${octavee}`);
+            }
             const staveNote = new StaveNote({
               keys: keys,
               duration: actualDuration,
@@ -176,17 +205,18 @@ const MusicNotation = ({ musicXML }) => {
               stem_direction: stemDirection
             });
             if (chord) {
-              chordss2.push(staveNote);
-              staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
-              staveNote.setNoteDisplaced(true);
+              //Handled one iteration before. Return.
+              return; 
             }
             const lastNote = notes2.length > 0 ? notes2[notes2.length - 1] : null;
             //If durations are different
-            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr') ||(lastNote && lastNote.stem_direction !== stemDirection)){
+            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr') || rest ||(lastNote && lastNote.stem_direction !== stemDirection)){
               if(beams2.length > 1){
                 totalBeams2[beam2Count] = [];
                 for(let i = 0; i < beams2.length; i++){
                   totalBeams2[beam2Count].push(beams2[i]);
+                  notes2[notes2.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'}); //Set flag style to black
+                  console.log(`After: notes[${notes2[notes2.length - (1+i)].hasFlag()}] = `, notes2[notes2.length - (1+i)]);
                 }
                 beam2Count++;
                 //Empty beams
@@ -201,8 +231,7 @@ const MusicNotation = ({ musicXML }) => {
               beams2.push(staveNote);
             }
           }
-        }
-      });//Notaların basılmasının bitişi
+      });
 
       for(let i = 0 ; i < beams.length; i++){
         notes[notes.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'});
@@ -211,22 +240,22 @@ const MusicNotation = ({ musicXML }) => {
       for(let i = 0 ; i < beams2.length; i++){
         notes2[notes2.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'});
       }
-      let j = 0;
+      /*let j = 0;
       for(let i = 0; i < notes.length; i++){
-        let gap = (measureWidth) / (notes.length + 1);
+        let gap = (measureWidth - padding) / (notes.length - chordss.length);
         if(chordss[j] == notes[i]){
-          chordss[j].setXShift(0);//Yasemin buraları düzelt
+          chordss[j].setXShift(-0 * gap);//Yasemin buraları düzelt
           j++;
         }
       }
       j = 0;
       for(let i = 0; i < notes2.length; i++){
-        let gap = (measureWidth) / (notes2.length);
+        let gap = (measureWidth - 1.4*padding) / (notes2.length - chordss2.length);
         if(chordss2[j] == notes2[i]){
-          chordss2[j].setXShift(0);//Yasemin buraları düzelt
+          chordss2[j].setXShift(-1 *gap);//Yasemin buraları düzelt
           j++;
         }
-      }
+      }*/
 
       //Draw stave1
       const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
