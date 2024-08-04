@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import Vex from 'vexflow';
+import Vex, { Stem } from 'vexflow';
 import { xml2json } from 'xml-js';
 
 const { Renderer, Stave, StaveNote, Formatter, Voice, Beam } = Vex.Flow;
@@ -76,15 +76,16 @@ const MusicNotation = ({ musicXML }) => {
       stave2.setContext(context).draw();
 
       const notes = [];
+      const chordss = [];
       let beams = [];
       let totalBeams = [];
       let beam1Count = 0;
       const notes2 = [];
+      const chordss2 = [];
       let beams2 = [];
       let totalBeams2 = [];
       let beam2Count = 0;
       const measureNotes = Array.isArray(measure.note) ? measure.note : [measure.note];
-
       measureNotes.forEach(note => {
         const staff = note.staff;
         if(staff._text === '1'){
@@ -112,20 +113,23 @@ const MusicNotation = ({ musicXML }) => {
             const staveNote = new StaveNote({
               keys: keys,
               duration: actualDuration,
-              stem_direction: stemDirection
+              stem_direction: stemDirection,
             });
             if (chord) {
               staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
+              staveNote.setNoteDisplaced(false);
+              //notes[notes.length - 1].setXShift(staveNote.getVoiceShiftWidth());
+              chordss.push(staveNote);
             }
             const lastNote = notes.length > 0 ? notes[notes.length - 1] : null;
             //If durations are different
-            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr')){
+            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr')||(lastNote && lastNote.stem_direction !== stemDirection)){
               if(beams.length > 1){
                 totalBeams[beam1Count] = [];
                 for(let i = 0; i < beams.length; i++){
                   totalBeams[beam1Count].push(beams[i]);
-                  notes[notes.length - (1 + i)].duration = 'q'; //DOES NOT WORKSSS!!!!
-                  console.log(`After: notes[${notes[notes.length - (1 + i)].duration}] = `, notes[notes.length - (1 + i)]);
+                  notes[notes.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'}); //Set flag style to black
+                  console.log(`After: notes[${notes[notes.length - (1+i)].hasFlag()}] = `, notes[notes.length - (1+i)]);
                 }
                 beam1Count++;
                 //Empty beams
@@ -172,16 +176,17 @@ const MusicNotation = ({ musicXML }) => {
               stem_direction: stemDirection
             });
             if (chord) {
+              chordss2.push(staveNote);
               staveNote.addModifier(new Vex.Flow.Annotation("a").setVerticalJustification(3), 0);
+              staveNote.setNoteDisplaced(true);
             }
             const lastNote = notes2.length > 0 ? notes2[notes2.length - 1] : null;
             //If durations are different
-            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr')){
+            if(lastNote && lastNote.duration !== actualDuration || (actualDuration === 'qr') ||(lastNote && lastNote.stem_direction !== stemDirection)){
               if(beams2.length > 1){
                 totalBeams2[beam2Count] = [];
                 for(let i = 0; i < beams2.length; i++){
                   totalBeams2[beam2Count].push(beams2[i]);
-                  notes2[notes2.length - (1 + i)].duration = 'q'; //DOES NOT WORKSSS!!!!
                 }
                 beam2Count++;
                 //Empty beams
@@ -198,6 +203,30 @@ const MusicNotation = ({ musicXML }) => {
           }
         }
       });//Notaların basılmasının bitişi
+
+      for(let i = 0 ; i < beams.length; i++){
+        notes[notes.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'});
+      }
+
+      for(let i = 0 ; i < beams2.length; i++){
+        notes2[notes2.length - (1+i)].setFlagStyle({fillStyle: 'transparent', strokeStyle: 'transparent'});
+      }
+      let j = 0;
+      for(let i = 0; i < notes.length; i++){
+        let gap = (measureWidth) / (notes.length + 1);
+        if(chordss[j] == notes[i]){
+          chordss[j].setXShift(0);//Yasemin buraları düzelt
+          j++;
+        }
+      }
+      j = 0;
+      for(let i = 0; i < notes2.length; i++){
+        let gap = (measureWidth) / (notes2.length);
+        if(chordss2[j] == notes2[i]){
+          chordss2[j].setXShift(0);//Yasemin buraları düzelt
+          j++;
+        }
+      }
 
       //Draw stave1
       const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
