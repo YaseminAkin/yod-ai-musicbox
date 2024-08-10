@@ -78,7 +78,7 @@ function CreateNewMusicbox() {
     setLoading(true); // Set loading state to true
 
     try {
-      const response = await fetch('http://localhost:3000/process-images', {
+      const response = await fetch('localhost:3000/process-images', {
         method: 'POST',
         body: formData
       });
