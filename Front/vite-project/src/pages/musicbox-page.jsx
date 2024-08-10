@@ -327,7 +327,7 @@ function Musicbox() {
                     style={{
                       width: '100%',
                       height: '600px', // Adjust height for mobile
-                      backgroundColor: '#000000',
+                      backgroundColor: '#191327',
                       border: '2px solid gray',
                       borderRadius: '0.5rem',
                     }}

@@ -3,3 +3,5 @@ Pillow
 Flask-Cors
 oemer
 music21
+numpy
+opencv-python-headless
