@@ -1,4 +1,4 @@
-import { useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
@@ -6,6 +6,7 @@ import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '@react-pdf-viewer/core/lib/styles/index.css';
+import MusicNotation from './MusicNotation';
 
 function useWindowSize() {
   const [windowSize, setWindowSize] = useState({
@@ -88,10 +89,21 @@ function Musicbox() {
     setPiano(sampler);
     setMidi(`http://localhost:3000/download/${data.midi}`);
     setPdf(`http://localhost:3000/download/${data.pdf}`);
+    // Fetch the musicXML content
+    const musicXmlResponse = (`http://localhost:3000/download/${data.musicxml}`);
+    fetch(musicXmlResponse)
+      .then(response => response.text())
+      .then(text => {
+        const musicXmlContent = text; // Set the musicXML content
+        setMusicXML(musicXmlContent); // Set the musicXML for visualization
+      })
+      .catch(error => {
+        console.error('Error fetching the musicXML:', error);
+      });
   }, []);
 
 
- const loadMidi = async (url) => {
+  const loadMidi = async (url) => {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     const midi = new Midi(arrayBuffer);
@@ -163,7 +175,7 @@ function Musicbox() {
   };
 
 
-    useEffect(() => {
+  useEffect(() => {
     return () => {
       resetMidi(); // Ensure MIDI stops when component unmounts or dependencies change
     };
@@ -269,13 +281,14 @@ function Musicbox() {
         </button>
         <div className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-32">
           <div className="flex flex-col items-center">
-            {pdf && (
+            {musicXML && (
               <div className="relative w-full flex flex-col items-center">
                 <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">Digital Notation</h3>
-                <div className="border border-gray-300 shadow-lg rounded-lg p-4 bg-white w-full max-w-lg" style={{ height: '500px' }}>
-                  <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.5.141/build/pdf.worker.min.js`}>
-                    <Viewer fileUrl={`${pdf}`} />
-                  </Worker>
+                <div
+                  className="border border-gray-300 shadow-lg rounded-lg p-6 bg-white w-full max-w-4xl flex items-center justify-center"
+                  style={{ height: '500px', width: '800px', overflow: 'auto' }} // Increased height and padding for a larger display
+                >
+                  <MusicNotation musicXML={musicXML}></MusicNotation>
                 </div>
               </div>
             )}
