@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as Tone from 'tone';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
@@ -7,10 +7,33 @@ import 'react-piano/dist/styles.css';
 function CreateNewMusicbox() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeNotes, setActiveNotes] = useState([]);
   const [piano, setPiano] = useState(null);
   const navigate = useNavigate();
+  const containerRef = useRef(null); // Reference to the outer container
+  const pianoWrapperRef = useRef(null); // Reference to the Piano's wrapper div
+  const [pianoWidth, setPianoWidth] = useState(0); // State to hold the Piano's width
+
+  // Function to update the Piano's width based on the wrapper div's width
+  const updatePianoWidth = () => {
+    if (pianoWrapperRef.current) {
+      setPianoWidth(pianoWrapperRef.current.offsetWidth);
+    }
+  };
+
+  // useEffect to set the initial width and add event listener for window resize
+  useEffect(() => {
+    updatePianoWidth(); // Set initial width
+
+    // Update width on window resize
+    window.addEventListener('resize', updatePianoWidth);
+
+    // Cleanup event listener on component unmount
+    return () => {
+      window.removeEventListener('resize', updatePianoWidth);
+    };
+  }, []);
 
   useEffect(() => {
     const sampler = new Tone.Sampler({
@@ -272,28 +295,41 @@ function useWindowSize() {
           </div>
         </div>
        {loading && (
-          <>
-            <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">Piano</h1>
-            <div
-              className="bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 md:max-w-7.5xl min-h-screen md:min-h-0 md:p-20 lg:p-16"
-              style={{
-                width: '100%',
-                maxWidth: '1000px',
-                height: '100%',
-                maxHeight: '500px',
-              }}
-            >
-              <h2 className="text-md md:text-lg mt-2 mb-4 text-center">While the Musicbox is processed, you can enjoy to play the piano!</h2>
-              <Piano
-                noteRange={{ first: firstNote, last: lastNote }}
-                playNote={() => { }} // Empty function as we don't want to play notes directly
-                stopNote={() => { }} // Empty function as we don't want to stop notes directly
-                activeNotes={activeNotes}
-                keyboardShortcuts={keyboardShortcuts}
-                width={window.innerWidth * 0.7}
-              />
-            </div>
-          </>
+<>
+      <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">
+        Piano
+      </h1>
+      <div
+        ref={containerRef}
+        className="bg-gradient-to-b from-white to-[#BA8BB8] rounded-t-lg md:rounded-lg shadow-lg p-8 md:max-w-7xl md:p-20 lg:p-16 mx-auto"
+        style={{
+          width: '100%',
+          maxWidth: '1000px',
+          height: '500px', // Fixed height for the container
+        }}
+      >
+        <h2 className="text-md md:text-lg mt-2 mb-4 text-center">
+          While the Musicbox is processed, you can enjoy playing the piano!
+        </h2>
+        <div
+          ref={pianoWrapperRef}
+          className="h-1/2" // Sets height to 50% of the parent container
+        >
+          {/* Render the Piano only after the width is determined */}
+          {pianoWidth > 0 && (
+            <Piano
+              noteRange={{ first: firstNote, last: lastNote }}
+              playNote={() => {}} // Empty function as we don't want to play notes directly
+              stopNote={() => {}} // Empty function as we don't want to stop notes directly
+              activeNotes={activeNotes}
+              keyboardShortcuts={keyboardShortcuts}
+              width={pianoWidth} // Set the Piano's width to match its wrapper's width
+            />
+          )}
+        </div>
+      </div>
+    </>
+
         )}
 
         <h1 className="text-white text-3xl md:text-5xl font-bold mb-2 p-10 text-center">FAQ</h1>
