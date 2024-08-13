@@ -6,6 +6,9 @@ import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '@react-pdf-viewer/core/lib/styles/index.css';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
 import MusicNotation from './MusicNotation';
 
 function useWindowSize() {
@@ -101,7 +104,6 @@ function Musicbox() {
         console.error('Error fetching the musicXML:', error);
       });
   }, []);
-
 
   const loadMidi = async (url) => {
     const response = await fetch(url);
@@ -252,6 +254,26 @@ function Musicbox() {
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
 
+  const handleDownloadPDF = () => {
+    const renderingArea = document.getElementById("rendering-area"); // Target the full content
+
+    html2canvas(renderingArea, { scale: 2, useCORS: true }).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        
+        // Calculate dimensions to fit the content in a portrait PDF
+        const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "pt",
+            format: [canvas.width, canvas.height],
+        });
+
+        // Adding the image to the PDF
+        pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+        pdf.save("music-notation.pdf");
+    });
+};
+
+
   const resetAllStates = () => {
     setMidi(null);
     setPdf(null);
@@ -285,11 +307,17 @@ function Musicbox() {
               <div className="relative w-full flex flex-col items-center">
                 <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">Digital Notation</h3>
                 <div
-                  className="border border-gray-300 shadow-lg rounded-lg p-6 bg-white w-full max-w-4xl flex items-center justify-center"
+                  id='pdf-content' className="border border-gray-300 shadow-lg rounded-lg p-6 bg-white w-full max-w-4xl flex items-center justify-center"
                   style={{ height: '500px', width: '800px', overflow: 'auto' }} // Increased height and padding for a larger display
                 >
                   <MusicNotation musicXML={musicXML}></MusicNotation>
                 </div>
+                <button
+                  onClick={handleDownloadPDF}
+                  className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg shadow"
+                >
+                  Download as PDF
+                </button>
               </div>
             )}
             {midi && (

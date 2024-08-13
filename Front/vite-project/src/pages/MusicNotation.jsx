@@ -37,7 +37,7 @@ const MusicNotation = ({ musicXML }) => {
     // Calculate height dynamically based on the number of measures
     const measures = musicJSON['score-partwise'].part.measure;
     const rows = Math.ceil(measures.length / 2); //Her satır için 2 measure alıcaz
-    renderer.resize(width, rows * (height * 2) + padding);
+    renderer.resize(width, rows * (height * 2) + padding + 40);
     const context = renderer.getContext();
 
     let x = padding;
@@ -48,12 +48,6 @@ const MusicNotation = ({ musicXML }) => {
     // Extract notes from musicJSON
     //MEASURE YAZILDIĞI YER!
     measures.forEach((measure, index) => {
-      //Separate the measures
-      //Draw a line (vertical)
-      context.beginPath();
-      context.moveTo(x, y);
-      context.lineTo(x, y + height);
-      context.stroke();
 
       // If the stave is full, move to the next row.
       if (x > width - padding) {
@@ -65,8 +59,8 @@ const MusicNotation = ({ musicXML }) => {
       const stave = new Stave(x, y, staveWidth);
       const stave2 = new Stave(x, y + height, staveWidth);
       if (index === 0) {
-        stave.addClef('treble').addTimeSignature('4/4'); //Burası sıkıntılı??? 4/2 de
-        stave2.addClef('bass').addTimeSignature('4/4');
+        stave.addClef('treble'); //Burası sıkıntılı??? 4/2 de
+        stave2.addClef('bass');
       }
       else if (index % 2 === 0) {
         stave.addClef('treble');
@@ -126,6 +120,13 @@ const MusicNotation = ({ musicXML }) => {
 
           const duration = note.type ? durationMapping[note.type._text] : 'q'; // Default to quarter if type is missing
           let actualDuration = rest ? `${duration}r` : duration; // If it is a rest, add 'r' to the duration.
+          if (rest) {
+            let dd = note.duration._text;
+            if (dd != '4' && dd != '2' && dd != '1' && dd != '8' && dd != '16' && dd != '32' && dd != '64') {
+              dd = '4';
+            }
+            actualDuration = `${dd}r`;
+          }
           console.log(actualDuration);
           let stemDirection = Vex.Flow.Stem.UP; //Default stem direction is UP 
 
@@ -194,6 +195,13 @@ const MusicNotation = ({ musicXML }) => {
           if (keys.length > 0) {
             const duration = note.type ? durationMapping[note.type._text] : 'q'; // Default to quarter if type is missing
             let actualDuration = rest ? `${duration}r` : duration;
+            if (rest) {
+              let dd = note.duration._text;
+              if (dd != '4' && dd != '2' && dd != '1' && dd != '8' && dd != '16' && dd != '32' && dd != '64') {
+                dd = '4';
+              }
+              actualDuration = `${dd}r`;
+            }
             let stemDirection = Vex.Flow.Stem.UP;
 
             if (pitch) {
@@ -255,8 +263,8 @@ const MusicNotation = ({ musicXML }) => {
         new Formatter().joinVoices([voice]).format([voice], measureWidth);
         voice.draw(context, stave);
       } catch (error) {
-          //log error
-          
+        //log error
+
       }
 
       //Draw stave2
@@ -265,7 +273,7 @@ const MusicNotation = ({ musicXML }) => {
         new Formatter().joinVoices([voice2]).format([voice2], measureWidth);
         voice2.draw(context, stave2);
       } catch (error) {
-        
+
       }
 
       //Draw all the beams
@@ -298,10 +306,11 @@ const MusicNotation = ({ musicXML }) => {
   return (
     <div
       id="scrollable-container"
-      style={{ width: '760px', height: '400px', overflow: 'auto', overflowX: 'hidden', border: '2px solid black' }}
+      style={{ width: '760px', height: '420px', overflow: 'auto', overflowX: 'hidden', border: '2px solid black' }}
     >
       <div id="rendering-area" ref={containerRef}
-        style={{ marginLeft: '-40px', marginTop: '-80px' }}></div>
+        style={{ marginLeft: '-40px', marginTop: '-40px' }}>
+      </div>
     </div>
   );
 };
