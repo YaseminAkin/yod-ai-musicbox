@@ -22,7 +22,9 @@
     "react-router-dom": "^6.26.0",
     "tone": "^15.0.4",
     "vexflow": "^4.2.4",
-    "xml-js": "^1.6.11"
+    "xml-js": "^1.6.11",
+    "jspdf": "^2.5.1",       
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
