@@ -1,4 +1,4 @@
-import { useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
@@ -31,7 +31,6 @@ function useWindowSize() {
 }
 
 function Musicbox() {
-
   const location = useLocation();
   const { data } = location.state || {};
 
@@ -43,14 +42,16 @@ function Musicbox() {
   const [piano, setPiano] = useState(null);
   const [midi, setMidi] = useState(null);
   const [pdf, setPdf] = useState(null);
-  const [mp3, setMp3] = useState(null);
   const [musicXML, setMusicXML] = useState(null);
-  const size = useWindowSize(); // Added size hook
+  const [soundProfile, setSoundProfile] = useState('Piano'); // State to track sound profile
+  const size = useWindowSize();
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const sampler = new Tone.Sampler({
+  // Sound profiles setup
+  const soundProfiles = {
+    Piano: {
+      baseUrl: "https://tonejs.github.io/audio/salamander/",
       urls: {
         A0: "A0.mp3",
         C1: "C1.mp3",
@@ -82,16 +83,59 @@ function Musicbox() {
         "F#7": "Fs7.mp3",
         A7: "A7.mp3",
         C8: "C8.mp3"
-      },
-      baseUrl: "https://tonejs.github.io/audio/salamander/",
-    }).toDestination();
+      }
+    },
+    Synth: {
+      baseUrl: "https://tonejs.github.io/audio/synth/",
+      urls: {
+        A0: "A0.mp3",
+        C1: "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        A1: "A1.mp3",
+        C2: "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        A2: "A2.mp3",
+        C3: "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        A3: "A3.mp3",
+        C4: "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        A4: "A4.mp3",
+        C5: "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        A5: "A5.mp3",
+        C6: "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        A6: "A6.mp3",
+        C7: "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        A7: "A7.mp3",
+        C8: "C8.mp3"
+      }
+    }
+  };
+
+  useEffect(() => {
+    const sampler = new Tone.Sampler(
+        soundProfiles[soundProfile].urls, {
+          baseUrl: soundProfiles[soundProfile].baseUrl,
+          onload: () => console.log(`${soundProfile} samples loaded!`)
+        }
+      ).toDestination();
     setPiano(sampler);
     setMidi(`http://localhost:3000/download/${data.midi}`);
     setPdf(`http://localhost:3000/download/${data.pdf}`);
-  }, []);
+  }, [data, soundProfile]); // Re-initiate the sampler when soundProfile changes
 
 
- const loadMidi = async (url) => {
+  const loadMidi = async (url) => {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     const midi = new Midi(arrayBuffer);
@@ -115,7 +159,6 @@ function Musicbox() {
     return newNoteQueue;
   };
 
-
   const playMidi = async (url, startTime = 0) => {
     console.log("Starting MIDI playback");
 
@@ -127,9 +170,20 @@ function Musicbox() {
     // Clear any existing scheduled events before scheduling new ones
     Tone.Transport.cancel();
     newNoteQueue.forEach(note => {
-      Tone.Transport.schedule(time => {
-        piano.triggerAttackRelease(note.name, note.duration, time, note.velocity);
-      }, note.time);
+      if(soundProfile === 'Piano')
+      {
+        Tone.Transport.schedule(time => {
+            piano.triggerAttackRelease(note.name, note.duration, time, note.velocity);
+          }, note.time);
+      }
+      else
+      {
+        Tone.Transport.schedule(time => {
+            const synth = new Tone.Synth().toDestination();
+            synth.triggerAttackRelease(note.name, note.duration, time, note.velocity);
+          }, note.time);
+      }
+
     });
 
     // Reset active notes for piano roll animation
@@ -139,11 +193,9 @@ function Musicbox() {
     Tone.Transport.position = `${startTime}i`;
     Tone.Transport.start();
 
-    // Delay the setIsPlaying(true) call by 0.5 seconds
     setTimeout(() => {
-
-    }, 1000);
-    setIsPlaying(true);
+      setIsPlaying(true);
+    }, 500);
   };
 
   const stopMidi = () => {
@@ -162,14 +214,12 @@ function Musicbox() {
     setActiveNotes([]);
   };
 
-
-    useEffect(() => {
+  useEffect(() => {
     return () => {
       resetMidi(); // Ensure MIDI stops when component unmounts or dependencies change
     };
   }, []);
 
-  // Ensure the piano roll is synchronized with the playback
   useEffect(() => {
     if (isPlaying) {
       const interval = setInterval(() => {
@@ -180,11 +230,12 @@ function Musicbox() {
 
         setActiveNotes(active);
 
-        // If current time exceeds the midi duration, stop the midi
+        // If current time exceeds the midi duration, stop the midi and reset everything
         if (currentTime >= midiDuration) {
           resetMidi();
+//           playMidi(midi, 0); // Automatically restart the MIDI and the flow from the beginning
         }
-      }, 110);
+      }, 50); // Shorter interval for smoother updates
 
       return () => clearInterval(interval);
     }
@@ -281,6 +332,20 @@ function Musicbox() {
             )}
             {midi && (
               <div className="relative mt-4 w-full flex flex-col items-center">
+                <div className="flex space-x-4 mb-4">
+                  <button
+                    onClick={() => setSoundProfile('Piano')}
+                    className={`${soundProfile === 'Piano' ? 'bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8]' : 'bg-[#512C4F]'} hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full`}
+                  >
+                    Piano
+                  </button>
+                  <button
+                    onClick={() => setSoundProfile('Synth')}
+                    className={`${soundProfile === 'Synth' ? 'bg-gradient-to-b from-[#FFFFFF] to-[#BA8BB8]' : 'bg-[#512C4F]'} hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full`}
+                  >
+                    Synth
+                  </button>
+                </div>
                 <div className="mt-4 flex flex-col items-center">
                   {!isPlaying ? (
                     <button
@@ -319,22 +384,25 @@ function Musicbox() {
                       borderRadius: '0.5rem',
                     }}
                   >
-                    {noteQueue.map((note, index) => (
-                      <div
-                        key={index}
-                        className="absolute bg-purple-700 text-white text-center rounded note"
-                        style={{
-                          left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 98.5}%`,
-                          top: `${(note.time - Tone.now()) * 90}%`,
-                          width: `${note.width}%`,
-                          height: `${note.duration * 15}rem`,
-                          transition: `top ${note.velocity / 2}s linear`,
-                          fontSize: `0.8rem`,
-                        }}
-                      >
-                        {note.name}
-                      </div>
-                    ))}
+                    {noteQueue.map((note, index) => {
+
+                      return (
+                        <div
+                          key={index}
+                          className="absolute bg-purple-700 text-white text-center rounded note"
+                          style={{
+                            left: `${(MidiNumbers.fromNote(note.name) - firstNote) / (lastNote - firstNote) * 98.5}%`,
+                            top: `${((note.time - Tone.Transport.seconds))* 75}%`,
+                            width: `${note.width}%`,
+                            height: `${note.duration * 15}rem`,
+                            fontSize: `0.8rem`,
+                            transition: 'top 0.1s linear', // Smooth transition for smoother movement
+                          }}
+                        >
+                          {note.name}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
