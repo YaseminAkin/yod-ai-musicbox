@@ -72,7 +72,11 @@ def four_point_transform(image, pts):
 
 def transformation(image):
     image = image.copy()
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) > 2 and image.shape[2] > 1:  
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+    #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image_size = gray.size
     threshold = blur_and_threshold(gray)
     edges = cv2.Canny(threshold, 50, 150, apertureSize=7)
@@ -179,26 +183,26 @@ def process_with_oemer(images):
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
-    # if 'images' not in request.files:
-    #     return jsonify({'error': 'No images part in the request'}), 400
+    if 'images' not in request.files:
+        return jsonify({'error': 'No images part in the request'}), 400
     #
-    # images = request.files.getlist('images')
-    #
-    # processed_images = []
-    # for image in images:
-    #     img = Image.open(image)
-    #
+    images = request.files.getlist('images')
+    
+    processed_images = []
+    for image in images:
+        img = Image.open(image)
+    
     #     # Process the image using OpenCV functions
-    #     processed_img = process_image(img)
-    #     processed_images.append(Image.fromarray(processed_img))
+        processed_img = process_image(img)
+        processed_images.append(Image.fromarray(processed_img))
     #
     # Process the images with the Oemer library
-    # musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
 
-    musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
-    midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
-    mp3_path = "f61a0cd1-b91e-4eb4-ba26-ea5b0aa0d8c2.mp3"
-    pdf_path = "88fab227-c553-4182-8a4c-2f33e6e988ba.pdf"
+    #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+    #mp3_path = "f61a0cd1-b91e-4eb4-ba26-ea5b0aa0d8c2.mp3"
+    #pdf_path = "88fab227-c553-4182-8a4c-2f33e6e988ba.pdf"
 
     return jsonify({
         'musicxml': musicxml_path,
