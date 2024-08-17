@@ -100,9 +100,10 @@ function CreateNewMusicbox() {
 
   const handleKeyDown = (event) => {
     const note = keyMap[event.key];
-    if (note && piano) {
+    if (note && piano && !pressedKeys.current.has(note)) {  // Check if key is already pressed
       piano.triggerAttack(note);
       setActiveNotes((prev) => [...prev, MidiNumbers.fromNote(note)]);
+      pressedKeys.current.add(note);  // Mark the key as pressed
     }
   };
 
@@ -111,6 +112,7 @@ function CreateNewMusicbox() {
     if (note && piano) {
       piano.triggerRelease(note);
       setActiveNotes((prev) => prev.filter((n) => n !== MidiNumbers.fromNote(note)));
+      pressedKeys.current.delete(note);  // Mark the key as released
     }
   };
 
@@ -131,6 +133,24 @@ function CreateNewMusicbox() {
     lastNote: lastNote,
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
+
+  // Function to handle note play when mouse clicks the piano keys
+  const handlePlayNote = (midiNumber) => {
+    const note = MidiNumbers.getAttributes(midiNumber).note;
+    if (piano) {
+      piano.triggerAttack(note);
+      setActiveNotes((prev) => [...prev, midiNumber]);
+    }
+  };
+
+  // Function to handle note release when mouse stops clicking the piano keys
+  const handleStopNote = (midiNumber) => {
+    const note = MidiNumbers.getAttributes(midiNumber).note;
+    if (piano) {
+      piano.triggerRelease(note);
+      setActiveNotes((prev) => prev.filter((n) => n !== midiNumber));
+    }
+  };
 
   const handleImageUpload = (event) => {
     const files = event.target.files;
@@ -210,6 +230,31 @@ function CreateNewMusicbox() {
     }
     return new Blob([ab], { type: mimeString });
   };
+
+  useEffect(() => {
+    // Set up the "beforeunload" event listener to delete user files when the page is closed
+    const handleBeforeUnload = async (e) => {
+      try {
+        // Trigger delete user files API request
+        await fetch('http://localhost:3000/delete-user-files', {
+          method: 'POST',
+          credentials: 'include', // Include cookies for session management
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (error) {
+        console.error('Error deleting user files on page unload:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup event listener when the component unmounts
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   return (
     <>
@@ -299,8 +344,8 @@ function CreateNewMusicbox() {
                   {pianoWidth > 0 && (
                     <Piano
                       noteRange={{ first: firstNote, last: lastNote }}
-                      playNote={() => {}} // Empty function as we don't want to play notes directly
-                      stopNote={() => {}} // Empty function as we don't want to stop notes directly
+                      playNote={handlePlayNote}
+                      stopNote={handleStopNote}
                       activeNotes={activeNotes}
                       keyboardShortcuts={keyboardShortcuts}
                       width={pianoWidth} // Set the Piano's width to match its wrapper's width
