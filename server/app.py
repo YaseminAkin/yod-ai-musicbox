@@ -8,10 +8,32 @@ import subprocess
 import music21
 import numpy as np
 import cv2
+from pillow_heif import register_heif_opener
+from tqdm.auto import tqdm
+from pdf2image import convert_from_path
+import fitz
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+""" def is_grey_scale(img_path):
+    img = Image.open(img_path).convert('RGB')
+    w, h = img.size
+    for i in range(w):
+        for j in range(h):
+            r, g, b = img.getpixel((i,j))
+            if r != g != b: 
+                return False
+    return True """
+
+def is_grayscale(image):
+    if image.mode in ("L", "I;16"):  # Check if the image is in a grayscale mode
+        return True
+    elif image.mode == "RGB":
+        np_img = np.array(image)
+        if np.all(np_img[..., 0] == np_img[..., 1]) and np.all(np_img[..., 1] == np_img[..., 2]):
+            return True
+    return False
 
 # Image processing functions
 def blur_and_threshold(gray):
@@ -134,7 +156,12 @@ def final_image(rotated):
 
 # Image processing function for Flask
 def process_image(image):
-    image_np = np.array(image)
+    if is_grayscale(image):
+        image_np = np.array(image)
+        print("Grayscale")
+    else:
+        image_np = np.array(image.convert('L'))
+        print("Not Grayscale")
     processed_image = transformation(image_np)
     final_img = final_image(processed_image)
     return final_img
@@ -204,7 +231,51 @@ def process_images():
         'musicxml': musicxml_path,
         'midi': midi_path,
     })
+def extract_images_from_pdf(pdf_path, output_folder):
+    # Open the PDF file
+    pdf_file = fitz.open(pdf_path)
+    
+    # Iterate over each page
+    for page_number in range(len(pdf_file)):
+        page = pdf_file.load_page(page_number)
+        image_list = page.get_images(full=True)
 
+        # Print the number of images in this page
+        print(f"[INFO] Found {len(image_list)} images on page {page_number}")
+        
+        for img_index, img in enumerate(image_list, start=1):
+            xref = img[0]
+            base_image = pdf_file.extract_image(xref)
+            image_bytes = base_image["image"]
+
+            # Convert to a PIL image
+            image = Image.open(io.BytesIO(image_bytes))
+            
+            # Save the image
+            image_filename = f"{output_folder}/page_{page_number+1}_img_{img_index}.png"
+            image.save(image_filename)
+            print(f"[INFO] Saved image: {image_filename}")
+
+    pdf_file.close()
+
+@app.route('/extract-images', methods=['POST'])
+def extract_images():
+    if 'pdf' not in request.files:
+        return jsonify({'error': 'No PDF file uploaded'}), 400
+    
+    pdf_file = request.files['pdf']
+    output_folder = "extracted_images"
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Save the PDF file temporarily
+    pdf_path = os.path.join(output_folder, pdf_file.filename)
+    pdf_file.save(pdf_path)
+    
+    # Extract images
+    extract_images_from_pdf(pdf_path, output_folder)
+    
+    # Respond with success
+    return jsonify({'message': 'Images extracted successfully'}), 200
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
