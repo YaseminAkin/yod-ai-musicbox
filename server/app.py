@@ -275,14 +275,17 @@ def process_pdf():
     })
 
 
-def extract_images_from_pdf(pdf_path, output_folder):
-    # Open the PDF file
-    pdf_file = fitz.open(pdf_path)
+def extract_images_from_pdf(pdf_file):
+    pdf_data = pdf_file.read()
+    pdf_path = f"/tmp/{uuid.uuid4()}.pdf"
     
-    # Iterate over each page
-    for page_number in range(len(pdf_file)):
-        page = pdf_file.load_page(page_number)
-        image_list = page.get_images(full=True)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_data)
+    
+    images = convert_from_path(pdf_path)
+    
+    return images
+
 
 
 @app.route('/download/<filename>', methods=['GET'])
