@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, session
 from flask_cors import CORS
 from PIL import Image
 import io
@@ -9,9 +9,12 @@ import music21
 import numpy as np
 import cv2
 from pdf2image import convert_from_path
+import glob
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app.secret_key = 'for_users'
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})  # Enable CORS with credentials
+
 
 
 def is_grayscale(image):
@@ -168,16 +171,36 @@ def extract_images_from_pdf(pdf_file):
     
     return images
 
-def process_with_oemer(images):
-    # Generate unique filenames for output files
-    musicxml_path = f"{uuid.uuid4()}.musicxml"
-    midi_path = f"{uuid.uuid4()}.midi"
+@app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
+def delete_user_files():
+    if request.method == 'OPTIONS':
+        return '', 200  # Handle the CORS preflight request
+
+    if 'user_id' not in session:
+        return jsonify({'error': 'User not recognized'}), 400
+
+    user_id = session['user_id']
+
+    # Find all files starting with user_id
+    user_files = glob.glob(f"{user_id}_*")
+
+    # Delete each file
+    for file in user_files:
+        os.remove(file)
+
+    return jsonify({'message': f'Deleted {len(user_files)} files for user {user_id}.'}), 200
+
+
+def process_with_oemer(images, user_id):
+    # Generate unique filenames with user_id prefix
+    musicxml_path = f"{user_id}_{uuid.uuid4()}.musicxml"
+    midi_path = f"{user_id}_{uuid.uuid4()}.midi"
 
     image_files = []
 
-    # Save images to disk with unique filenames
+    # Save images to disk with unique filenames, prefixed by user_id
     for img in images:
-        img_file = f"{uuid.uuid4()}.png"
+        img_file = f"{user_id}_{uuid.uuid4()}.png"
         img.save(img_file)
         image_files.append(img_file)
 
@@ -200,17 +223,21 @@ def process_with_oemer(images):
 def process_images():
     if 'images' not in request.files:
         return jsonify({'error': 'No images part in the request'}), 400
-    #
+
+    # Check if the user already has a user_id in the session, if not generate a new one
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())  # Generate a unique UUID for the user
+
+    user_id = session['user_id']  # Retrieve the user_id from the session
     images = request.files.getlist('images')
 
     processed_images = []
     for image in images:
         img = Image.open(image)
 
-        #     # Process the image using OpenCV functions
+        # Process the image using OpenCV functions
         processed_img = process_image(img)
         processed_images.append(Image.fromarray(processed_img))
-    #
     # Process the images with the Oemer library
     musicxml_path, midi_path = process_with_oemer(processed_images)
 
@@ -237,11 +264,26 @@ def process_pdf():
     musicxml_path, midi_path = process_with_oemer(processed_images)
     #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
     #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
+
+    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
 
     return jsonify({
         'musicxml': musicxml_path,
         'midi': midi_path,
     })
+
+
+def extract_images_from_pdf(pdf_path, output_folder):
+    # Open the PDF file
+    pdf_file = fitz.open(pdf_path)
+    
+    # Iterate over each page
+    for page_number in range(len(pdf_file)):
+        page = pdf_file.load_page(page_number)
+        image_list = page.get_images(full=True)
+
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):

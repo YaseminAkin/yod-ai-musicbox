@@ -335,10 +335,58 @@ function Musicbox() {
     resetMidi();
   };
 
-  const resetAllStatesAndNavigate = () => {
-    resetAllStates();
-    navigate('/');
-  };
+    const resetAllStatesAndNavigate = async () => {
+      try {
+        // Call the delete endpoint to remove user-specific files
+        const response = await fetch('http://localhost:3000/delete-user-files', {
+          method: 'POST',
+          credentials: 'include', // Include cookies for session management
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          console.log(result.message); // Log the success message
+        } else {
+          console.error(result.error); // Log the error message
+        }
+
+      } catch (error) {
+        console.error('Error deleting user files:', error);
+      }
+
+      // Reset all states after deleting files
+      resetAllStates();
+      navigate('/');
+    };
+
+
+ useEffect(() => {
+    // Set up the "beforeunload" event listener to delete user files when the page is closed
+    const handleBeforeUnload = async (e) => {
+      try {
+        // Trigger delete user files API request
+        await fetch('http://localhost:3000/delete-user-files', {
+          method: 'POST',
+          credentials: 'include', // Include cookies for session management
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (error) {
+        console.error('Error deleting user files on page unload:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup event listener when the component unmounts
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   return (
     <>
