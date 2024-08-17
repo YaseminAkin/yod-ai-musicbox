@@ -201,6 +201,7 @@ function useWindowSize() {
     try {
       const response = await fetch('http://localhost:3000/process-images', {
         method: 'POST',
+        credentials: 'include', // Include cookies for session management
         body: formData,
       });
 
