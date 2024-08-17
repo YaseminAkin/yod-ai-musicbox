@@ -8,7 +8,6 @@ import subprocess
 import music21
 import numpy as np
 import cv2
-import fitz
 from pdf2image import convert_from_path
 
 app = Flask(__name__)
