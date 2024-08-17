@@ -3,7 +3,6 @@ import * as Tone from 'tone';
 import { Midi } from '@tonejs/midi';
 import 'react-piano/dist/styles.css';
 import { Piano, KeyboardShortcuts, MidiNumbers } from 'react-piano';
-import { Worker, Viewer } from '@react-pdf-viewer/core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import html2canvas from 'html2canvas';
@@ -45,7 +44,7 @@ function Musicbox() {
   const [currentTime, setCurrentTime] = useState(0);
   const [piano, setPiano] = useState(null);
   const [midi, setMidi] = useState(null);
-  const [pdf, setPdf] = useState(null);
+  // const [pdf, setPdf] = useState(null);
   const [musicXML, setMusicXML] = useState(null);
   const [soundProfile, setSoundProfile] = useState('Piano'); // State to track sound profile
   const size = useWindowSize();
@@ -135,7 +134,7 @@ function Musicbox() {
       ).toDestination();
     setPiano(sampler);
     setMidi(`http://localhost:3000/download/${data.midi}`);
-    setPdf(`http://localhost:3000/download/${data.pdf}`);
+    // setPdf(`http://localhost:3000/download/${data.pdf}`);
     // Fetch the musicXML content
     const musicXmlResponse = (`http://localhost:3000/download/${data.musicxml}`);
     fetch(musicXmlResponse)
@@ -327,8 +326,7 @@ function Musicbox() {
 
   const resetAllStates = () => {
     setMidi(null);
-    setPdf(null);
-    setMp3(null);
+    // setPdf(null);
     setMusicXML(null);
     setIsPlaying(false);
     setActiveNotes([]);
@@ -365,7 +363,7 @@ function Musicbox() {
                 </div>
                 <button
                   onClick={handleDownloadPDF}
-                  className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg shadow"
+                  className="mt-4 bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full"
                 >
                   Download as PDF
                 </button>
