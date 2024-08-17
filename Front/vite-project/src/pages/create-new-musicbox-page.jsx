@@ -6,6 +6,7 @@ import 'react-piano/dist/styles.css';
 
 function CreateNewMusicbox() {
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [pdfFile, setPdfFile] = useState(null); // State for PDF file
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeNotes, setActiveNotes] = useState([]);
@@ -132,32 +133,59 @@ function CreateNewMusicbox() {
     keyboardConfig: KeyboardShortcuts.HOME_ROW,
   });
 
-  const handleImageUpload = (event) => {
+  const handleUpload = (event) => {
     const files = event.target.files;
-    const fileArray = Array.from(files);
-    const imageUrls = fileArray.map(file => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      return new Promise((resolve) => {
-        reader.onloadend = () => {
-          resolve(reader.result);
-        };
-      });
-    });
 
-    Promise.all(imageUrls).then(results => {
-      setImagePreviews(prevPreviews => [...prevPreviews, ...results]);
-      setCurrentIndex(0);
-    });
+    if (files.length === 0) return;
+
+    const file = files[0];
+
+    // Check if the uploaded file is a PDF
+    if (file.type === 'application/pdf') {
+        if (imagePreviews.length > 0) {
+            alert("You cannot upload a PDF while images are selected. Please remove the images first.");
+            return;
+        }
+        setPdfFile(file);
+    }
+    // Check if the uploaded files are images
+    else if (file.type.startsWith('image/')) {
+        if (pdfFile) {
+            alert("You cannot upload images while a PDF is selected. Please remove the PDF first.");
+            return;
+        }
+
+        const fileArray = Array.from(files);
+        const imageUrls = fileArray.map(file => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            return new Promise((resolve) => {
+                reader.onloadend = () => {
+                    resolve(reader.result);
+                };
+            });
+        });
+
+        Promise.all(imageUrls).then(results => {
+            setImagePreviews(prevPreviews => [...prevPreviews, ...results]);
+            setCurrentIndex(0);
+        });
+    } else {
+        alert("Please upload a valid image or PDF file.");
+    }
 
     event.target.value = null;
-  };
+};
 
   const handleImportClick = () => {
-    document.getElementById('fileInput').click();
+    if (pdfFile) {
+      document.getElementById('pdfInput').click();
+    } else {
+      document.getElementById('fileInput').click();
+    }
   };
 
-  const selectImage = (index) => {
+   const selectImage = (index) => {
     setCurrentIndex(index);
   };
 
@@ -169,16 +197,29 @@ function CreateNewMusicbox() {
     }
   };
 
-  const handleSubmit = async () => {
+  const deletePdf = () => {
+    setPdfFile(null);
+  };
+
+const handleSubmit = async () => {
     const formData = new FormData();
-    imagePreviews.forEach((image, index) => {
-      formData.append('images', dataURItoBlob(image), `image${index}.png`);
-    });
+
+    let endpoint = '';
+
+    if (pdfFile) {
+      formData.append('pdf', pdfFile);
+      endpoint = '/process-pdf'; // Set the endpoint for processing PDFs
+    } else {
+      imagePreviews.forEach((image, index) => {
+        formData.append('images', dataURItoBlob(image), `image${index}.png`);
+      });
+      endpoint = '/process-images'; // Set the endpoint for processing images
+    }
 
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/process-images', {
+      const response = await fetch(`http://localhost:3000${endpoint}`, {
         method: 'POST',
         body: formData,
       });
@@ -189,6 +230,7 @@ function CreateNewMusicbox() {
 
       const data = await response.json();
       setImagePreviews([]);
+      setPdfFile(null);
       setCurrentIndex(0);
       console.log(data);
       navigate('/musicbox', { state: { data } });
@@ -226,45 +268,59 @@ function CreateNewMusicbox() {
           <h2 className="text-xl md:text-3xl font-semibold mb-6 text-center">Welcome to the Musicbox</h2>
           <div className="flex flex-col items-center">
             <h2 className="text-[#1E1E1E] text-lg md:text-2xl mb-6 text-center">Create a New Musicbox</h2>
-            <div className="flex overflow-x-scroll w-full max-w-lg ">
-              {imagePreviews.map((preview, index) => (
+            {pdfFile ? (
+              <div className="relative m-2">
+                <p className="text-[#512C4F] text-lg font-semibold">{pdfFile.name}</p>
+                <button
+                  onClick={deletePdf}
+                  className="absolute top-0 right-0 bg-gray-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center"
+                >
+                  &times;
+                </button>
+              </div>
+            ) : (
+              <div className="flex overflow-x-scroll w-full max-w-lg">
+                {imagePreviews.map((preview, index) => (
                   <div key={index} className="relative m-2">
                     <img
-                        src={preview}
-                        alt={`Thumbnail ${index}`}
-                        className={`w-24 h-24 object-cover cursor-pointer rounded-lg ${currentIndex === index ? 'border-4 border-[#512C4F]' : ''}`}
-                        onClick={() => selectImage(index)}
+                      src={preview}
+                      alt={`Thumbnail ${index}`}
+                      className={`w-24 h-24 object-cover cursor-pointer rounded-lg ${currentIndex === index ? 'border-4 border-[#512C4F]' : ''}`}
+                      onClick={() => selectImage(index)}
                     />
                     <button
-                        onClick={() => deleteImage(index)}
-                        className="absolute top-0 right-0 bg-gray-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center"
+                      onClick={() => deleteImage(index)}
+                      className="absolute top-0 right-0 bg-gray-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center"
                     >
                       &times;
                     </button>
                   </div>
-              ))}
-            </div>
-            <button
+                ))}
+              </div>
+            )}
+            {!pdfFile && (
+              <button
                 onClick={handleImportClick}
                 className="bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full w-72 md:w-80 lg:w-96"
-            >
-              {imagePreviews.length === 0 ? "Import Sheet Music" : "Import More Sheet Music"}
-            </button>
-            {imagePreviews.length > 0 && (
-                <button
-                    onClick={handleSubmit}
-                    className="mt-4 bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full"
-                >
-                  Submit Images
-                </button>
+              >
+                {imagePreviews.length === 0 ? "Import Sheet Music" : "Import More Sheet Music"}
+              </button>
+            )}
+            {(imagePreviews.length > 0 || pdfFile) && (
+              <button
+                onClick={handleSubmit}
+                className="mt-4 bg-[#512C4F] hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full"
+              >
+                Submit
+              </button>
             )}
             <input
-                type="file"
-                id="fileInput"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                multiple
+              type="file"
+              id="fileInput"
+              accept="image/*,application/pdf"
+              onChange={handleUpload}
+              className="hidden"
+              multiple
             />
             {loading && (
                 <div className="mt-4 flex justify-center items-center">
