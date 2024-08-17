@@ -8,9 +8,6 @@ import subprocess
 import music21
 import numpy as np
 import cv2
-from pillow_heif import register_heif_opener
-from tqdm.auto import tqdm
-from pdf2image import convert_from_path
 import fitz
 import glob
 
@@ -29,6 +26,7 @@ CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})  # Ena
                 return False
     return True """
 
+
 def is_grayscale(image):
     if image.mode in ("L", "I;16"):  # Check if the image is in a grayscale mode
         return True
@@ -37,6 +35,7 @@ def is_grayscale(image):
         if np.all(np_img[..., 0] == np_img[..., 1]) and np.all(np_img[..., 1] == np_img[..., 2]):
             return True
     return False
+
 
 # Image processing functions
 def blur_and_threshold(gray):
@@ -97,11 +96,11 @@ def four_point_transform(image, pts):
 
 def transformation(image):
     image = image.copy()
-    if len(image.shape) > 2 and image.shape[2] > 1:  
+    if len(image.shape) > 2 and image.shape[2] > 1:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image
-    #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image_size = gray.size
     threshold = blur_and_threshold(gray)
     edges = cv2.Canny(threshold, 50, 150, apertureSize=7)
@@ -170,13 +169,52 @@ def process_image(image):
     return final_img
 
 
-"""
-Oemeri beklemeden runlamak istiyosanız diğer kısımı commente alıp burayı kullanın (içine önceden yaptığınız 
-musicxml ve midi koyun)
+def extract_images_from_pdf(pdf_path, output_folder):
+    # Open the PDF file
+    pdf_file = fitz.open(pdf_path)
 
-    musicxml_path = "cefff497-cedc-44fa-8e3f-2eb6e95884c0.musicxml"
-    midi_path = "9b2ea95f-de3a-4d87-a99a-7f65259b18c8.midi"
-"""
+    # Iterate over each page
+    for page_number in range(len(pdf_file)):
+        page = pdf_file.load_page(page_number)
+        image_list = page.get_images(full=True)
+
+        # Print the number of images in this page
+        print(f"[INFO] Found {len(image_list)} images on page {page_number}")
+
+        for img_index, img in enumerate(image_list, start=1):
+            xref = img[0]
+            base_image = pdf_file.extract_image(xref)
+            image_bytes = base_image["image"]
+
+            # Convert to a PIL image
+            image = Image.open(io.BytesIO(image_bytes))
+
+            # Save the image
+            image_filename = f"{output_folder}/page_{page_number + 1}_img_{img_index}.png"
+            image.save(image_filename)
+            print(f"[INFO] Saved image: {image_filename}")
+
+    pdf_file.close()
+
+
+@app.route('/extract-images', methods=['POST'])
+def extract_images():
+    if 'pdf' not in request.files:
+        return jsonify({'error': 'No PDF file uploaded'}), 400
+
+    pdf_file = request.files['pdf']
+    output_folder = "extracted_images"
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Save the PDF file temporarily
+    pdf_path = os.path.join(output_folder, pdf_file.filename)
+    pdf_file.save(pdf_path)
+
+    # Extract images
+    extract_images_from_pdf(pdf_path, output_folder)
+
+    # Respond with success
+    return jsonify({'message': 'Images extracted successfully'}), 200
 
 
 @app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
@@ -241,11 +279,15 @@ def process_images():
     processed_images = []
     for image in images:
         img = Image.open(image)
+
+        # Process the image using OpenCV functions
         processed_img = process_image(img)
         processed_images.append(Image.fromarray(processed_img))
-
-    # Process the images with the Oemer library, passing user_id as a prefix
+    # Process the images with the Oemer library
     musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
+
+    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
 
     return jsonify({
         'musicxml': musicxml_path,
@@ -262,42 +304,6 @@ def extract_images_from_pdf(pdf_path, output_folder):
         page = pdf_file.load_page(page_number)
         image_list = page.get_images(full=True)
 
-        # Print the number of images in this page
-        print(f"[INFO] Found {len(image_list)} images on page {page_number}")
-        
-        for img_index, img in enumerate(image_list, start=1):
-            xref = img[0]
-            base_image = pdf_file.extract_image(xref)
-            image_bytes = base_image["image"]
-
-            # Convert to a PIL image
-            image = Image.open(io.BytesIO(image_bytes))
-            
-            # Save the image
-            image_filename = f"{output_folder}/page_{page_number+1}_img_{img_index}.png"
-            image.save(image_filename)
-            print(f"[INFO] Saved image: {image_filename}")
-
-    pdf_file.close()
-
-@app.route('/extract-images', methods=['POST'])
-def extract_images():
-    if 'pdf' not in request.files:
-        return jsonify({'error': 'No PDF file uploaded'}), 400
-    
-    pdf_file = request.files['pdf']
-    output_folder = "extracted_images"
-    os.makedirs(output_folder, exist_ok=True)
-    
-    # Save the PDF file temporarily
-    pdf_path = os.path.join(output_folder, pdf_file.filename)
-    pdf_file.save(pdf_path)
-    
-    # Extract images
-    extract_images_from_pdf(pdf_path, output_folder)
-    
-    # Respond with success
-    return jsonify({'message': 'Images extracted successfully'}), 200
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
