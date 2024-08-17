@@ -152,8 +152,6 @@ musicxml ve midi koyun)
 def process_with_oemer(images):
 
     # Generate unique filenames for output files
-    mp3_path = f"{uuid.uuid4()}.mp3"
-    pdf_path = f"{uuid.uuid4()}.pdf"
     musicxml_path = f"{uuid.uuid4()}.musicxml"
     midi_path = f"{uuid.uuid4()}.midi"
     
@@ -169,16 +167,14 @@ def process_with_oemer(images):
     for img_file in image_files:
         subprocess.run(['oemer', img_file, '-o', musicxml_path])
 
-    # Convert MusicXML to MIDI using MuseScore
-    subprocess.run(['mscore', musicxml_path, '-o', midi_path, '--force', '-F'])
+    # Convert MusicXML to MIDI using music21
+    score = music21.converter.parse(musicxml_path)
+    mf = music21.midi.translate.music21ObjectToMidiFile(score)
+    mf.open(midi_path, 'wb')
+    mf.write()
+    mf.close()
 
-    # Convert MusicXML to MP3 using MuseScore
-    subprocess.run(['mscore', musicxml_path, '-o', mp3_path, '--force', '-F'])
-
-    # Convert MusicXML to PDF using MuseScore
-    subprocess.run(['mscore', musicxml_path, '-o', pdf_path, '--force', '-F'])
-
-    return musicxml_path, midi_path, mp3_path, pdf_path
+    return musicxml_path, midi_path
 
 
 @app.route('/process-images', methods=['POST'])
@@ -197,7 +193,7 @@ def process_images():
         processed_images.append(Image.fromarray(processed_img))
     #
     # Process the images with the Oemer library
-    musicxml_path, midi_path, mp3_path, pdf_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path = process_with_oemer(processed_images)
 
     #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
     #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
@@ -207,8 +203,6 @@ def process_images():
     return jsonify({
         'musicxml': musicxml_path,
         'midi': midi_path,
-        'mp3': mp3_path,
-        'pdf': pdf_path
     })
 
 
