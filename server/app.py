@@ -264,7 +264,7 @@ def process_pdf():
     musicxml_path, midi_path = process_with_oemer(processed_images)
     #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
     #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
-    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
+    musicxml_path, midi_path = process_with_oemer(processed_images)
 
     # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
     # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
@@ -273,19 +273,6 @@ def process_pdf():
         'musicxml': musicxml_path,
         'midi': midi_path,
     })
-
-
-def extract_images_from_pdf(pdf_file):
-    pdf_data = pdf_file.read()
-    pdf_path = f"/tmp/{uuid.uuid4()}.pdf"
-    
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_data)
-    
-    images = convert_from_path(pdf_path)
-    
-    return images
-
 
 
 @app.route('/download/<filename>', methods=['GET'])
