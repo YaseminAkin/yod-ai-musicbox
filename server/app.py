@@ -1,7 +1,6 @@
 from flask import Flask, request, send_file, jsonify, session
 from flask_cors import CORS
 from PIL import Image
-import io
 import os
 import uuid
 import subprocess
@@ -14,7 +13,6 @@ import glob
 app = Flask(__name__)
 app.secret_key = 'for_users'
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})  # Enable CORS with credentials
-
 
 
 def is_grayscale(image):
@@ -159,17 +157,17 @@ def process_image(image):
     return final_img
 
 
-
 def extract_images_from_pdf(pdf_file):
     pdf_data = pdf_file.read()
     pdf_path = f"/tmp/{uuid.uuid4()}.pdf"
-    
+
     with open(pdf_path, "wb") as f:
         f.write(pdf_data)
-    
+
     images = convert_from_path(pdf_path)
-    
+
     return images
+
 
 @app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
 def delete_user_files():
@@ -218,7 +216,6 @@ def process_with_oemer(images, user_id):
     return musicxml_path, midi_path
 
 
-
 @app.route('/process-images', methods=['POST'])
 def process_images():
     if 'images' not in request.files:
@@ -239,20 +236,27 @@ def process_images():
         processed_img = process_image(img)
         processed_images.append(Image.fromarray(processed_img))
     # Process the images with the Oemer library
-    musicxml_path, midi_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
 
-    #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
-    #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
 
     return jsonify({
         'musicxml': musicxml_path,
         'midi': midi_path,
-    }) 
+    })
+
 
 @app.route('/process-pdf', methods=['POST'])
 def process_pdf():
     if 'pdf' not in request.files:
         return jsonify({'error': 'No PDF file uploaded'}), 400
+
+    # Check if the user already has a user_id in the session, if not generate a new one
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())  # Generate a unique UUID for the user
+
+    user_id = session['user_id']  # Retrieve the user_id from the session
 
     pdf_file = request.files['pdf']
     images = extract_images_from_pdf(pdf_file)
@@ -261,10 +265,7 @@ def process_pdf():
         processed_img = process_image(pdf_image)
         processed_images.append(Image.fromarray(processed_img))
 
-    musicxml_path, midi_path = process_with_oemer(processed_images)
-    #musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
-    #midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
-    musicxml_path, midi_path = process_with_oemer(processed_images)
+    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
 
     # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
     # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
