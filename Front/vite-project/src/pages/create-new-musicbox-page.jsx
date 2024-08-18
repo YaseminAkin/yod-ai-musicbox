@@ -390,6 +390,8 @@ const handleSubmit = async () => {
                 }}
               >
                 <h2 className="text-md md:text-lg mt-2 mb-4 text-center">
+                  Please do not close the page until the precess is done!
+
                   While the Musicbox is processed, you can enjoy playing the piano!
                 </h2>
                 <div
@@ -441,7 +443,7 @@ const handleSubmit = async () => {
               </p>
               <h3 className="text-lg md:text-2xl font-semibold mt-6">How do I save the Musicbox?</h3>
               <p className="text-md md:text-lg mt-2">
-                To save the Musicbox, simply click on the "Save the PDF" button located in the top-right corner of the
+                To save the Musicbox, simply click on the "Save the PDF" button located above the 'Play MIDI' button of the
                 image
                 thumbnail.
               </p>
