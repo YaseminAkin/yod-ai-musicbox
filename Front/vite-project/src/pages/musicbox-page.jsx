@@ -362,31 +362,30 @@ function Musicbox() {
       navigate('/');
     };
 
+   useEffect(() => {
+      // Set up the "beforeunload" event listener to delete user files when the page is closed
+      const handleBeforeUnload = async (e) => {
+        try {
+          // Trigger delete user files API request
+          await fetch('http://localhost:3000/delete-user-files', {
+            method: 'POST',
+            credentials: 'include', // Include cookies for session management
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+        } catch (error) {
+          console.error('Error deleting user files on page unload:', error);
+        }
+      };
 
- useEffect(() => {
-    // Set up the "beforeunload" event listener to delete user files when the page is closed
-    const handleBeforeUnload = async (e) => {
-      try {
-        // Trigger delete user files API request
-        await fetch('http://localhost:3000/delete-user-files', {
-          method: 'POST',
-          credentials: 'include', // Include cookies for session management
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-      } catch (error) {
-        console.error('Error deleting user files on page unload:', error);
-      }
-    };
+      window.addEventListener('beforeunload', handleBeforeUnload);
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // Cleanup event listener when the component unmounts
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
+      // Cleanup event listener when the component unmounts
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
+    }, []);
 
   return (
     <>
@@ -402,7 +401,8 @@ function Musicbox() {
           <div className="flex flex-col items-center">
             {musicXML && (
               <div className="relative w-full flex flex-col items-center">
-                <h3 className="text-[#1E1E1E] text-lg md:text-xl mb-2 text-center">Digital Notation</h3>
+                <h3 className="text-lg md:text-2xl font-semibold text-center">Digital Notation</h3>
+                <br/>
                 <div
                   id='pdf-content' className="border border-gray-300 shadow-lg rounded-lg p-6 bg-white w-full max-w-4xl flex items-center justify-center"
                   style={{ height: '500px', width: '800px', overflow: 'auto' }} // Increased height and padding for a larger display

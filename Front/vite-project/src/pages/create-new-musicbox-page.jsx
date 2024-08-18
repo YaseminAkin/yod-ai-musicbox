@@ -389,9 +389,10 @@ const handleSubmit = async () => {
                   height: '500px', // Fixed height for the container
                 }}
               >
+                <h2 className="text-lg md:text-2xl font-semibold text-center">
+                  Please do not close the page until the process is done!
+                </h2>
                 <h2 className="text-md md:text-lg mt-2 mb-4 text-center">
-                  Please do not close the page until the precess is done!
-
                   While the Musicbox is processed, you can enjoy playing the piano!
                 </h2>
                 <div
