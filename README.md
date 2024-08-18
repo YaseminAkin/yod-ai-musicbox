@@ -27,6 +27,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install git+https://github.com/BreezeWhite/oemer
+python3 app.py runserver
 ```
 
 **Client (Terminal 2):**
@@ -37,6 +38,10 @@ npm run dev
 ```
 
 After running the commands, you can open the project on your browser by typing `http://localhost:5173/` in the address bar.
+
+## Usage
+You can upload an image of a music sheet to the application. The application will convert the image to musicxml and play the music.
+You can find note sheet images directly from the internet. We also add some note sheet examples into `/examples directory.
 
 ## Important Note
 We use `oemer` library to convert image to `musicxml`. It works on local without any problem. However, it does not work on server. 
