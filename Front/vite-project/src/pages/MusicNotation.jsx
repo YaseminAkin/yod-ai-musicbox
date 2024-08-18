@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
-import Vex, { Stem } from 'vexflow';
+import { useEffect, useRef } from 'react';
+import Vex from 'vexflow';
 import { xml2json } from 'xml-js';
 
 const { Renderer, Stave, StaveNote, Formatter, Voice, Beam } = Vex.Flow;
 
+// eslint-disable-next-line react/prop-types
 const MusicNotation = ({ musicXML }) => {
   const containerRef = useRef(null);
 

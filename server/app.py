@@ -1,30 +1,18 @@
 from flask import Flask, request, send_file, jsonify, session
 from flask_cors import CORS
 from PIL import Image
-import io
 import os
 import uuid
 import subprocess
 import music21
 import numpy as np
 import cv2
-import fitz
+from pdf2image import convert_from_path
 import glob
 
 app = Flask(__name__)
 app.secret_key = 'for_users'
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})  # Enable CORS with credentials
-
-
-""" def is_grey_scale(img_path):
-    img = Image.open(img_path).convert('RGB')
-    w, h = img.size
-    for i in range(w):
-        for j in range(h):
-            r, g, b = img.getpixel((i,j))
-            if r != g != b: 
-                return False
-    return True """
 
 
 def is_grayscale(image):
@@ -169,52 +157,16 @@ def process_image(image):
     return final_img
 
 
-def extract_images_from_pdf(pdf_path, output_folder):
-    # Open the PDF file
-    pdf_file = fitz.open(pdf_path)
+def extract_images_from_pdf(pdf_file):
+    pdf_data = pdf_file.read()
+    pdf_path = f"/tmp/{uuid.uuid4()}.pdf"
 
-    # Iterate over each page
-    for page_number in range(len(pdf_file)):
-        page = pdf_file.load_page(page_number)
-        image_list = page.get_images(full=True)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_data)
 
-        # Print the number of images in this page
-        print(f"[INFO] Found {len(image_list)} images on page {page_number}")
+    images = convert_from_path(pdf_path)
 
-        for img_index, img in enumerate(image_list, start=1):
-            xref = img[0]
-            base_image = pdf_file.extract_image(xref)
-            image_bytes = base_image["image"]
-
-            # Convert to a PIL image
-            image = Image.open(io.BytesIO(image_bytes))
-
-            # Save the image
-            image_filename = f"{output_folder}/page_{page_number + 1}_img_{img_index}.png"
-            image.save(image_filename)
-            print(f"[INFO] Saved image: {image_filename}")
-
-    pdf_file.close()
-
-
-@app.route('/extract-images', methods=['POST'])
-def extract_images():
-    if 'pdf' not in request.files:
-        return jsonify({'error': 'No PDF file uploaded'}), 400
-
-    pdf_file = request.files['pdf']
-    output_folder = "extracted_images"
-    os.makedirs(output_folder, exist_ok=True)
-
-    # Save the PDF file temporarily
-    pdf_path = os.path.join(output_folder, pdf_file.filename)
-    pdf_file.save(pdf_path)
-
-    # Extract images
-    extract_images_from_pdf(pdf_path, output_folder)
-
-    # Respond with success
-    return jsonify({'message': 'Images extracted successfully'}), 200
+    return images
 
 
 @app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
@@ -295,14 +247,33 @@ def process_images():
     })
 
 
-def extract_images_from_pdf(pdf_path, output_folder):
-    # Open the PDF file
-    pdf_file = fitz.open(pdf_path)
-    
-    # Iterate over each page
-    for page_number in range(len(pdf_file)):
-        page = pdf_file.load_page(page_number)
-        image_list = page.get_images(full=True)
+@app.route('/process-pdf', methods=['POST'])
+def process_pdf():
+    if 'pdf' not in request.files:
+        return jsonify({'error': 'No PDF file uploaded'}), 400
+
+    # Check if the user already has a user_id in the session, if not generate a new one
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())  # Generate a unique UUID for the user
+
+    user_id = session['user_id']  # Retrieve the user_id from the session
+
+    pdf_file = request.files['pdf']
+    images = extract_images_from_pdf(pdf_file)
+    processed_images = []
+    for pdf_image in images:
+        processed_img = process_image(pdf_image)
+        processed_images.append(Image.fromarray(processed_img))
+
+    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
+
+    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
+    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+
+    return jsonify({
+        'musicxml': musicxml_path,
+        'midi': midi_path,
+    })
 
 
 @app.route('/download/<filename>', methods=['GET'])
