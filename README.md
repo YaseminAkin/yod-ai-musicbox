@@ -13,10 +13,14 @@ in the process of learning music. Additionally, we plan to demonstrate to users 
 specified note sheet on the piano virtually.
 
 ## Installation 
-
+Firstly, you need to clone the project to your local machine. You can use the following command to clone the project:
+```bash
+git clone https://github.com/YaseminAkin/yod-ai-musicbox.git
+```
+Then, you need to open two separate terminals for the server and the client.
 You can write the following commands in the terminal to run the project:
 
-**Server:**
+**Server (Terminal 1):**
 ```bash
 cd server
 python3 -m venv venv
@@ -25,12 +29,14 @@ pip install -r requirements.txt
 pip install git+https://github.com/BreezeWhite/oemer
 ```
 
-**Client:**
+**Client (Terminal 2):**
 ```bash
 cd Front/vite-project
 npm install
 npm run dev 
 ```
+
+After running the commands, you can open the project on your browser by typing `http://localhost:5173/` in the address bar.
 
 ## Important Note
 We use `oemer` library to convert image to `musicxml`. It works on local without any problem. However, it does not work on server. 
