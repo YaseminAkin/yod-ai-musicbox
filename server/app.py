@@ -1,57 +1,81 @@
-from flask import Flask, request, send_file, jsonify, session
-from flask_cors import CORS
-from PIL import Image
+import glob
 import os
-import uuid
+import shutil
 import subprocess
+import uuid
+
+import cv2
 import music21
 import numpy as np
-import cv2
+from flask import Flask, jsonify, request, send_file, session
+from flask_cors import CORS
 from pdf2image import convert_from_path
-import glob
+from PIL import Image
 
 app = Flask(__name__)
 app.secret_key = 'for_users'
-CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})  # Enable CORS with credentials
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}})
+
+UPLOAD_DIR = "/tmp/musicbox"
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+MAX_PDF_PAGES = 10
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
+PROCESS_TIMEOUT = 180  # 3 minutes
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def is_grayscale(image):
-    if image.mode in ("L", "I;16"):  # Check if the image is in a grayscale mode
+def _cleanup_old_sessions():
+    try:
+        for entry in os.scandir(UPLOAD_DIR):
+            if entry.is_dir():
+                shutil.rmtree(entry.path, ignore_errors=True)
+    except Exception:
+        pass
+
+_cleanup_old_sessions()
+
+
+def _allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _user_dir(user_id):
+    path = os.path.join(UPLOAD_DIR, user_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+# ── Image preprocessing ─────────────────────────────────────────────────────
+
+def _is_grayscale(image):
+    if image.mode in ("L", "I;16"):
         return True
-    elif image.mode == "RGB":
-        np_img = np.array(image)
-        if np.all(np_img[..., 0] == np_img[..., 1]) and np.all(np_img[..., 1] == np_img[..., 2]):
-            return True
+    if image.mode == "RGB":
+        arr = np.array(image)
+        return np.all(arr[..., 0] == arr[..., 1]) and np.all(arr[..., 1] == arr[..., 2])
     return False
 
 
-# Image processing functions
-def blur_and_threshold(gray):
+def _blur_and_threshold(gray):
     gray = cv2.GaussianBlur(gray, (3, 3), 2)
-    threshold = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    threshold = cv2.fastNlMeansDenoising(threshold, 11, 31, 9)
-    return threshold
+    thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    return cv2.fastNlMeansDenoising(thr, 11, 31, 9)
 
 
-def biggest_contour(contours, min_area):
-    biggest = None
-    max_area = 0
-    biggest_n = 0
-    approx_contour = None
-    for n, i in enumerate(contours):
-        area = cv2.contourArea(i)
+def _biggest_contour(contours, min_area):
+    biggest, max_area, approx_contour = None, 0, None
+    for n, c in enumerate(contours):
+        area = cv2.contourArea(c)
         if area > min_area / 10:
-            peri = cv2.arcLength(i, True)
-            approx = cv2.approxPolyDP(i, 0.02 * peri, True)
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
             if area > max_area:
-                biggest = approx
-                max_area = area
-                biggest_n = n
-                approx_contour = approx
-    return biggest_n, approx_contour
+                biggest, max_area, approx_contour = n, area, approx
+    return biggest, approx_contour
 
 
-def order_points(pts):
+def _order_points(pts):
     pts = pts.reshape(4, 2)
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
@@ -63,222 +87,233 @@ def order_points(pts):
     return rect
 
 
-def four_point_transform(image, pts):
-    rect = order_points(pts)
-    (tl, tr, br, bl) = rect
-    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-    maxWidth = max(int(widthA), int(widthB))
-    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-    maxHeight = max(int(heightA), int(heightB))
-    dst = np.array([
-        [0, 0],
-        [maxWidth - 1, 0],
-        [maxWidth - 1, maxHeight - 1],
-        [0, maxHeight - 1]], dtype="float32")
+def _four_point_transform(image, pts):
+    rect = _order_points(pts)
+    tl, tr, br, bl = rect
+    maxWidth = max(
+        int(np.sqrt(((br[0]-bl[0])**2) + ((br[1]-bl[1])**2))),
+        int(np.sqrt(((tr[0]-tl[0])**2) + ((tr[1]-tl[1])**2)))
+    )
+    maxHeight = max(
+        int(np.sqrt(((tr[0]-br[0])**2) + ((tr[1]-br[1])**2))),
+        int(np.sqrt(((tl[0]-bl[0])**2) + ((tl[1]-bl[1])**2)))
+    )
+    dst = np.array([[0,0],[maxWidth-1,0],[maxWidth-1,maxHeight-1],[0,maxHeight-1]], dtype="float32")
     M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
-    return warped
+    return cv2.warpPerspective(image, M, (maxWidth, maxHeight))
 
 
-def transformation(image):
-    image = image.copy()
-    if len(image.shape) > 2 and image.shape[2] > 1:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image
-    # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    image_size = gray.size
-    threshold = blur_and_threshold(gray)
-    edges = cv2.Canny(threshold, 50, 150, apertureSize=7)
-    contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    simplified_contours = []
-    for cnt in contours:
-        hull = cv2.convexHull(cnt)
-        simplified_contours.append(cv2.approxPolyDP(hull, 0.001 * cv2.arcLength(hull, True), True))
-    biggest_n, approx_contour = biggest_contour(simplified_contours, image_size)
-    if approx_contour is not None and len(approx_contour) == 4:
-        approx_contour = np.float32(approx_contour)
-        dst = four_point_transform(image, approx_contour)
-    else:
-        # If no suitable contour is found, return the original image
-        dst = image
-    return dst
+def _transform(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) > 2 and image.shape[2] > 1 else image
+    thr = _blur_and_threshold(gray)
+    edges = cv2.Canny(thr, 50, 150, apertureSize=7)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    simplified = [cv2.approxPolyDP(cv2.convexHull(c), 0.001 * cv2.arcLength(cv2.convexHull(c), True), True) for c in contours]
+    _, approx = _biggest_contour(simplified, gray.size)
+    if approx is not None and len(approx) == 4:
+        return _four_point_transform(image, np.float32(approx))
+    return image
 
 
-def increase_brightness(img, value=30):
-    # Ensure the image is in 8-bit unsigned integer format
-    if img.dtype == np.float64 or img.dtype == np.float32:
-        img = cv2.convertScaleAbs(img)
-
-    # Convert grayscale to BGR if needed
-    if len(img.shape) == 2:  # If the image is grayscale
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-
-    # Convert the image to HSV
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-    # Split the HSV channels
+def _sharpen_and_brighten(rotated):
+    kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
+    sharpened = cv2.filter2D(rotated, -1, kernel)
+    if sharpened.dtype in (np.float64, np.float32):
+        sharpened = cv2.convertScaleAbs(sharpened)
+    if len(sharpened.shape) == 2:
+        sharpened = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+    hsv = cv2.cvtColor(sharpened, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
-
-    # Increase the brightness
-    lim = 255 - value
-    v[v > lim] = 255
-    v[v <= lim] += value
-
-    # Merge the channels back and convert to BGR
-    final_hsv = cv2.merge((h, s, v))
-    img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
-
-    return img
+    v[v > 225] = 255
+    v[v <= 225] += 30
+    sharpened = cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
+    return cv2.cvtColor(sharpened, cv2.COLOR_BGR2GRAY)
 
 
-def final_image(rotated):
-    kernel_sharpening = np.array([[0, -1, 0],
-                                  [-1, 5, -1],
-                                  [0, -1, 0]])
-    sharpened = cv2.filter2D(rotated, -1, kernel_sharpening)
-    sharpened = increase_brightness(sharpened, 30)
-    gray_sharpened = cv2.cvtColor(sharpened, cv2.COLOR_BGR2GRAY)
-    return gray_sharpened
+def _preprocess(pil_image):
+    arr = np.array(pil_image) if _is_grayscale(pil_image) else np.array(pil_image.convert('L'))
+    transformed = _transform(arr)
+    return Image.fromarray(_sharpen_and_brighten(transformed))
 
 
-# Image processing function for Flask
-def process_image(image):
-    if is_grayscale(image):
-        image_np = np.array(image)
-        print("Grayscale")
-    else:
-        image_np = np.array(image.convert('L'))
-        print("Not Grayscale")
-    processed_image = transformation(image_np)
-    final_img = final_image(processed_image)
-    return final_img
+# ── OMR pipeline ─────────────────────────────────────────────────────────────
+
+def _run_homr(img_path):
+    result = subprocess.run(
+        ['homr', img_path],
+        capture_output=True, text=True, timeout=PROCESS_TIMEOUT
+    )
+    expected_xml = os.path.splitext(img_path)[0] + '.musicxml'
+    if result.returncode != 0 or not os.path.exists(expected_xml):
+        raise RuntimeError(result.stderr or "homr produced no output")
+    return expected_xml
 
 
-def extract_images_from_pdf(pdf_file):
-    pdf_data = pdf_file.read()
-    pdf_path = f"/tmp/{uuid.uuid4()}.pdf"
+def _analyze_chords(score):
+    try:
+        key_obj = score.analyze('key')
+        key_name = key_obj.tonic.name
+        mode = key_obj.mode
 
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_data)
+        scale = key_obj.getScale()
+        scale_notes = [str(p.name) for p in scale.pitches[:-1]]
 
-    images = convert_from_path(pdf_path)
+        chordified = score.chordify()
+        chord_map = {}
+        for c in chordified.flatten().getElementsByClass('Chord'):
+            if not (c.isTriad() or c.isSeventh()):
+                continue
+            try:
+                root = c.root().name
+                quality = c.quality
+                symbol = c.commonName
+                notes = [str(p.name) for p in c.pitches]
+                try:
+                    rn = music21.roman.romanNumeralFromChord(c, key_obj)
+                    roman = str(rn.figure)
+                except Exception:
+                    roman = None
+                k = (root, symbol)
+                if k not in chord_map:
+                    chord_map[k] = {
+                        'root': root, 'symbol': symbol,
+                        'quality': quality, 'notes': notes,
+                        'roman': roman, 'count': 0,
+                    }
+                chord_map[k]['count'] += 1
+            except Exception:
+                continue
 
-    return images
+        chords = sorted(chord_map.values(), key=lambda x: -x['count'])[:10]
+        return {'key': key_name, 'mode': mode, 'scale_notes': scale_notes, 'chords': chords}
+    except Exception:
+        return None
 
 
-@app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
-def delete_user_files():
-    if request.method == 'OPTIONS':
-        return '', 200  # Handle the CORS preflight request
+def _process_pages(pil_images, user_id):
+    work_dir = _user_dir(user_id)
 
-    if 'user_id' not in session:
-        return jsonify({'error': 'User not recognized'}), 400
+    musicxml_path = None
+    for i, img in enumerate(pil_images):
+        preprocessed = _preprocess(img)
+        img_path = os.path.join(work_dir, f"page_{i}.png")
+        preprocessed.save(img_path)
+        try:
+            musicxml_path = _run_homr(img_path)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            raise RuntimeError(f"OMR failed on page {i+1}: {e}")
 
-    user_id = session['user_id']
+    if not musicxml_path:
+        raise RuntimeError("No pages were processed")
 
-    # Find all files starting with user_id
-    user_files = glob.glob(f"{user_id}_*")
-
-    # Delete each file
-    for file in user_files:
-        os.remove(file)
-
-    return jsonify({'message': f'Deleted {len(user_files)} files for user {user_id}.'}), 200
-
-
-def process_with_oemer(images, user_id):
-    # Generate unique filenames with user_id prefix
-    musicxml_path = f"{user_id}_{uuid.uuid4()}.musicxml"
-    midi_path = f"{user_id}_{uuid.uuid4()}.midi"
-
-    image_files = []
-
-    # Save images to disk with unique filenames, prefixed by user_id
-    for img in images:
-        img_file = f"{user_id}_{uuid.uuid4()}.png"
-        img.save(img_file)
-        image_files.append(img_file)
-
-    # Run Oemer on each image file to generate MusicXML
-    for img_file in image_files:
-        subprocess.run(['oemer', img_file, '-o', musicxml_path])
-
-    # Convert MusicXML to MIDI using music21
+    midi_path = os.path.splitext(musicxml_path)[0] + '.midi'
     score = music21.converter.parse(musicxml_path)
+    chord_data = _analyze_chords(score)
     mf = music21.midi.translate.music21ObjectToMidiFile(score)
     mf.open(midi_path, 'wb')
     mf.write()
     mf.close()
 
-    return musicxml_path, midi_path
+    rel_xml = os.path.relpath(musicxml_path, UPLOAD_DIR)
+    rel_midi = os.path.relpath(midi_path, UPLOAD_DIR)
+    return rel_xml, rel_midi, chord_data
+
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+
+def _get_or_create_user_id():
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+    return session['user_id']
 
 
 @app.route('/process-images', methods=['POST'])
 def process_images():
     if 'images' not in request.files:
-        return jsonify({'error': 'No images part in the request'}), 400
+        return jsonify({'error': 'No images in request'}), 400
 
-    # Check if the user already has a user_id in the session, if not generate a new one
-    if 'user_id' not in session:
-        session['user_id'] = str(uuid.uuid4())  # Generate a unique UUID for the user
+    files = request.files.getlist('images')
+    for f in files:
+        if not _allowed_file(f.filename):
+            return jsonify({'error': f'File type not allowed: {f.filename}'}), 400
+        f.stream.seek(0, 2)
+        if f.stream.tell() > MAX_UPLOAD_BYTES:
+            return jsonify({'error': 'File exceeds 20 MB limit'}), 413
+        f.stream.seek(0)
 
-    user_id = session['user_id']  # Retrieve the user_id from the session
-    images = request.files.getlist('images')
+    user_id = _get_or_create_user_id()
 
-    processed_images = []
-    for image in images:
-        img = Image.open(image)
+    try:
+        pil_images = [Image.open(f) for f in files]
+        rel_xml, rel_midi, chord_data = _process_pages(pil_images, user_id)
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Processing timed out (3 min limit). Try a simpler image.'}), 504
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {e}'}), 500
 
-        # Process the image using OpenCV functions
-        processed_img = process_image(img)
-        processed_images.append(Image.fromarray(processed_img))
-    # Process the images with the Oemer library
-    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
-
-    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
-    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
-
-    return jsonify({
-        'musicxml': musicxml_path,
-        'midi': midi_path,
-    })
+    return jsonify({'musicxml': rel_xml, 'midi': rel_midi, 'chord_data': chord_data})
 
 
 @app.route('/process-pdf', methods=['POST'])
 def process_pdf():
     if 'pdf' not in request.files:
-        return jsonify({'error': 'No PDF file uploaded'}), 400
-
-    # Check if the user already has a user_id in the session, if not generate a new one
-    if 'user_id' not in session:
-        session['user_id'] = str(uuid.uuid4())  # Generate a unique UUID for the user
-
-    user_id = session['user_id']  # Retrieve the user_id from the session
+        return jsonify({'error': 'No PDF in request'}), 400
 
     pdf_file = request.files['pdf']
-    images = extract_images_from_pdf(pdf_file)
-    processed_images = []
-    for pdf_image in images:
-        processed_img = process_image(pdf_image)
-        processed_images.append(Image.fromarray(processed_img))
+    if not _allowed_file(pdf_file.filename):
+        return jsonify({'error': 'Only PDF files accepted here'}), 400
 
-    musicxml_path, midi_path = process_with_oemer(processed_images, user_id)
+    pdf_file.stream.seek(0, 2)
+    if pdf_file.stream.tell() > MAX_UPLOAD_BYTES:
+        return jsonify({'error': 'File exceeds 20 MB limit'}), 413
+    pdf_file.stream.seek(0)
 
-    # musicxml_path = "9da88d61-76b2-48bb-a5aa-6135c9945c93.musicxml"
-    # midi_path = "53d32db5-681b-4d57-acda-52ed5a83b11d.midi"
+    user_id = _get_or_create_user_id()
+    tmp_pdf = f"/tmp/musicbox_upload_{uuid.uuid4()}.pdf"
 
-    return jsonify({
-        'musicxml': musicxml_path,
-        'midi': midi_path,
-    })
+    try:
+        pdf_file.save(tmp_pdf)
+        pages = convert_from_path(tmp_pdf)
+        if len(pages) > MAX_PDF_PAGES:
+            return jsonify({'error': f'PDF too long (max {MAX_PDF_PAGES} pages)'}), 400
+
+        rel_xml, rel_midi, chord_data = _process_pages(pages, user_id)
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Processing timed out (3 min limit).'}), 504
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {e}'}), 500
+    finally:
+        if os.path.exists(tmp_pdf):
+            os.remove(tmp_pdf)
+
+    return jsonify({'musicxml': rel_xml, 'midi': rel_midi, 'chord_data': chord_data})
 
 
-@app.route('/download/<filename>', methods=['GET'])
+@app.route('/download/<path:filename>', methods=['GET'])
 def download_file(filename):
-    return send_file(filename, as_attachment=True)
+    full_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(full_path):
+        return jsonify({'error': 'File not found'}), 404
+    # Block path traversal
+    if not os.path.abspath(full_path).startswith(os.path.abspath(UPLOAD_DIR)):
+        return jsonify({'error': 'Invalid path'}), 400
+    return send_file(full_path)
+
+
+@app.route('/delete-user-files', methods=['POST', 'OPTIONS'])
+def delete_user_files():
+    if request.method == 'OPTIONS':
+        return '', 200
+    if 'user_id' not in session:
+        return jsonify({'error': 'User not recognized'}), 400
+    user_dir = os.path.join(UPLOAD_DIR, session['user_id'])
+    if os.path.exists(user_dir):
+        shutil.rmtree(user_dir, ignore_errors=True)
+    return jsonify({'message': 'Files deleted'}), 200
 
 
 if __name__ == '__main__':
