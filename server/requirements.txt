@@ -1,7 +1,7 @@
 Flask
 Pillow
 Flask-Cors
-oemer
+homr
 music21
 numpy
 opencv-python-headless

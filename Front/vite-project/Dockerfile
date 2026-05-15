@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:21-alpine as build
+FROM node:22-alpine
 WORKDIR /usr/src/app
 COPY . /usr/src/app
 RUN npm install

@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./server:/app
+      - oemer-models:/root/.oemer
     restart: always
     networks:
       - app
@@ -22,12 +22,13 @@ services:
       - "5173:5173"
     depends_on:
       - server
-    volumes:
-      - ./Front/vite-project:/app
     restart: always
     networks:
       - app
     container_name: musicbox
+
+volumes:
+  oemer-models:
 
 networks:
   app:
